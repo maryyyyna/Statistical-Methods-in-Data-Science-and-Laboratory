@@ -1,0 +1,941 @@
+---
+title: "SDS I - Homework 2"
+author: "Laura Thoft Cesario, Livia Oddi, Marco Muscas, Marina Iuliana Aur"
+date: "January 12th, 2024"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    number_sections: false
+    theme: paper
+    highlight: tango
+    code_folding: show
+bibliography: citations.bib
+link-citations: yes
+csl: nature.csl
+---
+
+<style type="text/css">
+  
+  body{
+    font-size: 12pt;
+  }
+  
+  img {
+    height: 100%;
+    width: auto;
+  
+  }
+  
+  th {
+    text-align: center;
+  }
+  
+  th > img {
+    height: 350px;
+  }
+  
+  center > div > img {
+    padding-top: 30px;
+    padding-bottom: 30px;
+  }
+  
+</style>
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r setup_imports, echo = FALSE}
+set.seed(1234)
+options(scipen = 999)
+
+library(knitr)
+library("plotrix")              
+
+source("./simulation.R")
+source("./bounds.R")
+source("./metrics.R")
+source("./visualization.R")
+```
+
+# Exercise 1 - Bound estimation with Confidence Sequences
+
+Before we begin with the exercise, let us start with a brief recap
+on the setup of our little experiment.
+
+## Starting point
+
+We want to try this methodology for building Confidence Intervals on a
+population quantity of interest, by means of an ever growing sample.
+Practically, this means that as "*time passes*", the sample is expected
+to grow larger. This is an alternative approach to the cited techniques
+found in the literature (and in the topics we studied along the
+semester) which consider the sample size to be *constant* in size.
+
+## Our goal
+
+In this exercise we try to build confidence intervals for a population
+quantity of interest. The **mean**:
+
+$$
+  \mu = \mathrm{E}[X], \hspace{.3cm} \text{ where } X \sim F(\cdot)
+$$
+
+Of course we will go with estimation trough Monte Carlo simulation and
+taking the empirical mean $$
+  \hat{\mu}_t = \frac{\sum_{i = 1}^{n} X_i}{n}
+$$
+
+from the cumulative sample we generate. Let's define better how the data
+is generated, introducing also a bit of notation.
+
+For each timestep $\{1, ..., t\}$, where $t \in \mathrm{N}$, we have a
+set of observation $\{Y_t\}^{+\infty}_{1}$ such that $$
+  Y_{t+1} = Y_t \cup \{Y^1_{{t+1}}, Y^2_{{t+1}},\ ...\}
+$$ Meaning: at each timestep, the set $Y_{t+1}$ is composed by the
+elements generated at $Y_t$ plus some **new ones** generated at ${t+1}$.
+The exponent in the ${Y_{t+1}^i}$ is simply there to indicate the newly
+generated sampled that we assume to be in the distribution $F_x$, it has
+nothing to do with powers.
+
+This results in the sequential nature of the experiment, different from
+the purely Monte Carlo one where we replace the sampling distribution.
+
+As mentioned before, we will need to build confidence sets while
+leveraging at the same time the ever growing sample size as time goes
+on. Similarly to the previously done exercise, we will also target a
+*confidence level* $1-\alpha$. So that: $$
+  \mathbb{P}(\mu \in \hat{C_t}) \geq 1 - \alpha
+$$
+
+#### Some comments, assumptions and simplifications
+
+We thought it might be better to clearly list them, so here they go:
+
+-   The samples are taken from a sub-gaussian, 1D distribution, for
+    which the parameter $\mu$ is known.
+-   We are fixing $t$, although the theoretical setup allows for
+    possibly infinitely large sequences. That is absurd of course, but
+    it's still an assumption.
+-   The parameter $t$ only indicates a timestep, and **not** a sample
+    size.
+-   The sample grows at each $t$ by a fixed $n$ parameter, later on you
+    will see it clearly stated.
+
+## Background on 1d-subgaussian distributions
+
+
+We chose as 1-sub-Gaussian distributions for our simulation the Standard Normal distribution, 
+the Beta distribution and the Exponential distribution with specific parameters.
+
+The standard normal distribution with $\mu =0$ and $\sigma = 1$ is a classic example of a 
+sub-Gaussian random variable. Its moment-generating function satisfies the sub-Gaussian tail inequality.
+
+In the exponential distribution, the tails decay rapidly when the rate is sufficiently low. 
+Therefore, by choosing a rate $\lambda = 0.5$, the exponential distribution is considered sub-Gaussian.
+
+Lastly, while looking for candidate sub-gaussian distribution, we came across [this article](https://www.r-bloggers.com/2017/12/sub-gaussian-property-for-the-beta-distribution-part-2/)
+which suggested the parametrization we used for our experiment, namely using $(\alpha = 1.0, \beta = 1.3)$.
+
+## Exercise 1 - let's begin!
+
+Let's consider the starting situation:
+
+```{r params_setup}
+
+timesteps <- seq(1, 5)   # The number of timesteps in which we see the sample growing
+simulation_steps <- 5    # Simulation size
+alpha <- 0.05            # The desired confidence level
+new_samples_each_t <- 10 # The number of new sample we introduce at each iteration, this is the $n$ parameter cited in the assumptions
+distro_name <- "Normal"# A starting (underlying) distribution which we will sample from
+```
+
+```{r fun_theoretical_mean, echo=TRUE}
+underlying_mean <- calculate_theoretical_mean(distro_name) 
+underlying_mean # This depends on the underlying distro, not really a calculation.
+```
+
+Just a clarification on **why** we have a function for the theoretical
+mean.. We can change the distribution via the distro_name parameter,
+this way we don't have to remember to change the underlying (true) mean.
+Just change the name and you're set!
+
+------------------------------------------------------------------------
+
+Now we can start with the interesting bit:
+
+```{r a_first_calculation, echo = TRUE}
+
+# Simulation parameters --------------------------------------------------
+timesteps <- seq(1, 10)
+simulation_steps <- 1e3
+alpha <- 0.05
+new_samples_each_t <- 10
+
+
+# Simulation for Normal Distribution -------------------
+distro_name <- "Normal"
+underlying_mean <- calculate_theoretical_mean(distro_name)
+sim_res <- compute_simulation(timesteps = timesteps, 
+                              M = simulation_steps, 
+                              alpha = alpha, 
+                              num_new_samples_at_each_t = new_samples_each_t,
+                              distribution_name = distro_name, 
+                              true_mean = underlying_mean)
+
+# Plot of different CSs/CIs 
+plot_bounds(sim_res, timesteps = timesteps, distribution_name = distro_name, 
+            true_mean = underlying_mean, new_samples_each_t = new_samples_each_t,
+            title = "Different CSs/CIs for Normal Distribution")
+
+```
+
+Did we do it? Yes and no! We though it would be nice to have a
+pre-fabricated function to just output what we needed. But let's see now
+what's under the hood of this `compute_simulation( ... )` function.
+
+Let's begin by saying, this function is two-fold. It performs the
+simulation and computation of the intervals (step 1) and evaluates the
+performance of the intervals with respect to the **true** underlying
+mean.
+
+### The simulation
+
+As stated before, this is a Monte Carlo simulation, therefore we are
+repeating the given experiment $M$ times assuming that we will
+approximate the **real** quantity of interest.
+
+Let's put it roughly in symbols: $$
+  \theta \approx \hat{\theta} = \frac{1}{M} \sum^M_{i=1}{\hat{\theta_i}}
+$$
+
+Here of course the quantity of interest is any parameter indicated by
+$\theta$, in our case it's the population/sampling mean $\mu, \hat{\mu}$
+respectively. But wait! We apply the same procedure for the estimation
+of the confidence bands!
+
+We assume that repeating the experiment $M$ times, where the experiment
+is "calculate the CIs" as $t$ increases, we will see the bounds
+converging such that the $\mathbb{P}(\mu \in C_t) \geq 1-\alpha$
+condition is satisfied.
+
+Let us take a step back first, and define the various bounds - so that
+we will have then all the tools for our experiments.
+
+First, the bounds defined in Equation 3 of the homework, which we'll
+simply call the **non-asymptotic bounds**: $$
+  \hat{\mu} \pm 1.7 \cdot \left( \sqrt{\frac{log\ log (2t) + 0.72\ log(10.4 / \alpha)}{t}} \right)
+$$
+
+And then equation 4, which is a "less strict" version of the 3. $$
+  \hat{\mu} \pm 1.7 \cdot \hat{\sigma}_t \cdot \left( \sqrt{\frac{log\ log (2t) + 0.72\ log(10.4 / \alpha)}{t}} \right)
+$$
+
+The "less-strict"-ness is given by the multiplication factor of
+$\hat{\sigma}_t$, which is the sample standard deviation. Assuming
+$\hat{\sigma}_t > 1$ we can intuitively imagine the bounds getting
+larger.
+
+Let's bring then back the Hoeffding bounds, Chebyshev bounds, and
+Gaussian bounds! We will consider the interval to be built like $$
+  \big(\hat{\mu} - \epsilon, \hat{\mu} + \epsilon \big)
+$$
+
+Where epsilon is a multiplication constant, function of $t$, $\alpha$
+and possibly the sample itself.
+
+First, the Chebyshev epsilon. $$
+  \epsilon_C = \frac{\sigma_t}{\sqrt{t\ \alpha}}
+$$
+
+Then, the Hoeffding one. $$
+  \epsilon_H = \frac{\sigma_t}{\sqrt{\frac{1}{2t}\ log \left(\frac{2}{\alpha} \right)}}
+$$
+
+Finally the gaussian one. $$
+  \epsilon_G = z_{\alpha/2} \cdot \frac{\hat{\sigma}_t}{\sqrt{t}}, \text{ where } z_{\alpha/2} = 1 - \mathrm{Q}(1 - \alpha)
+$$
+
+The implementation for the computation of the various bounds is left
+here below. As an additional note, the implementation is the same as the
+one specified in `bounds.R`.
+
+```{r, collapse = TRUE}
+
+# Equation 3
+compute_na_bounds <- function(samples, t, alpha) {
+  
+  mean_estimate <- mean(samples)
+  bounds <- c(-1, +1) * 1.7 * sqrt(((log(log(2 * t))) + (0.72 * log(10.4/alpha)))/t)
+  return(mean_estimate + bounds)
+}
+
+# Equation 4
+compute_a_bounds <- function(samples, t, alpha){
+
+  mean_estimate <- mean(samples)
+  
+  if(length(samples) < 2)
+    sigma_estimate <- 0
+  else
+    sigma_estimate <- sd(samples)
+
+  
+  bounds <- c(-1, +1) * 1.7 * sqrt(((log(log(2 * t))) + (0.72 * log(10.4/alpha)))/t)
+  
+  return(mean_estimate + sigma_estimate * bounds)
+}
+
+compute_chebyshev_bounds <- function(samples, t, alpha){
+
+  mean_estimate <- mean(samples)
+  if(length(samples) < 2)
+    sigma_estimate <- 0
+  else
+    sigma_estimate <- sd(samples)
+
+  epsilon_cheby  <- sigma_estimate / (sqrt(t * alpha))
+  ci_cheby <- mean_estimate + c(-1, +1) * (epsilon_cheby)
+  return(ci_cheby)
+}
+
+compute_hoeffding_bounds <- function(samples, t, alpha){
+
+  mean_estimate <- mean(samples)
+
+  epsilon_hoeffding <- sqrt( (1/(2 * t)) * log(2/alpha))
+  ci_hoeffding <- mean_estimate + c(-1, +1) * (epsilon_hoeffding)
+  return(ci_hoeffding)
+}
+
+compute_gaussian_bounds <- function(samples, t, alpha){
+
+  mean_estimate <- mean(samples)
+  
+  if(length(samples) < 2)
+    sigma_estimate <- 0
+  else
+    sigma_estimate <- sd(samples)
+
+  z_value <- qnorm(1 - alpha/2)  
+  margin_of_error <- z_value * (sigma_estimate / sqrt(t))
+  ci_gaussian <- mean_estimate + c(-1, +1) * margin_of_error
+  return(ci_gaussian)
+}
+```
+
+### Setting up some simulation tools
+
+As stated before, we want a bit of consistency and reproducibility
+within our code so let's define some helper, helpful, functions!
+
+```{r simulation_part_1}
+
+# We need some 1d-sub-gaussian distributions, so here they are!
+# Already parametrized and ready for action.
+# Just specify the desired number of samples and the distribution name, and
+# you'll be sampling.
+#---------------------------------------------------
+generate_samples <- function(sample_size, distribution_name) {
+  if (distribution_name == 'Normal' | distribution_name == "Gaussian") {
+    return(rnorm(sample_size, mean = 0, sd = 1))
+    
+  } else if (distribution_name == 'Beta') {
+    return(rbeta(sample_size, shape1 = 1.0, shape2 = 1.3))
+    
+  } else if (distribution_name == 'Exponential') {
+    return(rexp(sample_size, rate = 0.5))
+  }
+}
+
+#---------------------------------------------------
+calculate_theoretical_mean <- function(distribution_name){
+  if (distribution_name == 'Normal' | distribution_name == "Gaussian") {
+    return(0)
+  } else if (distribution_name == 'Beta') {
+    return(0.48)
+  } else if (distribution_name == 'Exponential') {
+    return(2)
+  }
+}
+```
+
+### Calculating the bounds
+
+```{r simulation_pt2, echo = TRUE}
+#---------------------------------------------------
+compute_simulated_bounds <- function(timesteps, alpha, distribution_name, true_mean, num_new_samples_at_each_t) {
+  num_of_timesteps = length(timesteps)
+  iteration_sim_results = matrix(data = NA, nrow = num_of_timesteps, ncol = 13)
+  samples_t <- c()
+  
+  for(idx in 1:num_of_timesteps){ # The time steps is a vector of the various instants.
+    t = timesteps[idx]
+    iteration_sim_results[idx, 1] = t
+    
+    # Generate the new samples at instant 't'
+    new_samples <- generate_samples(num_new_samples_at_each_t, distribution_name) # At each timestep, the sample size increases by t (we do not want to replace the sample at t-1)
+    samples_t = c(samples_t, new_samples) # Concatenation to the old samples generated at t - 1 
+    iteration_sim_results[idx, 2] = mean(samples_t) # Save the quantity we are trying to estimate
+    iteration_sim_results[idx, 3] = true_mean
+    
+    # Confidence sequences on the non-asymptotic bounds
+    ci_na_bounds = compute_na_bounds(samples_t, t, alpha)
+    iteration_sim_results[idx, 4] = ci_na_bounds[1]
+    iteration_sim_results[idx, 5] = ci_na_bounds[2]
+    
+    # Confidence sequences on the "relaxed" asymptotic bounds
+    ci_a_bounds  <- compute_a_bounds(samples_t, t, alpha)
+
+    iteration_sim_results[idx, 6] = ci_a_bounds[1]
+    iteration_sim_results[idx, 7] = ci_a_bounds[2]
+    
+    # Compute Chebyshev CIs
+    ci_cheby <- compute_chebyshev_bounds(samples_t, t, alpha)
+    iteration_sim_results[idx, 8] = ci_cheby[1]
+    iteration_sim_results[idx, 9] = ci_cheby[2]
+
+    # Compute Hoeffding CIs
+    ci_hoeffding <- compute_hoeffding_bounds(samples_t, t, alpha)
+    iteration_sim_results[idx, 10] = ci_hoeffding[1]
+    iteration_sim_results[idx, 11] = ci_hoeffding[2]
+    
+    # Compute Gaussian CIs
+    ci_gaussian <- compute_gaussian_bounds(samples_t, t, alpha)
+    iteration_sim_results[idx, 12] = ci_gaussian[1]
+    iteration_sim_results[idx, 13] = ci_gaussian[2]
+  }
+  return(iteration_sim_results)
+}
+```
+
+Finally, setting up the simulation!
+
+```{r simulation_pt3, echo = TRUE, collapse = TRUE}
+#---------------------------------------------------
+compute_simulation <- function(timesteps, M, alpha, num_new_samples_at_each_t, distribution_name, true_mean) {
+  
+  simulation_result <- matrix(data = 0, nrow = length(timesteps), ncol = 13)
+  metrics_na <- matrix(data = NA, nrow = M, ncol = 4)
+  metrics_a <- matrix(data = NA, nrow = M, ncol = 4)
+  metrics_cheby <- matrix(data = NA, nrow = M, ncol = 4)
+  metrics_hoeff <- matrix(data = NA, nrow = M, ncol = 4)
+  metrics_gauss <- matrix(data = NA, nrow = M, ncol = 4)
+  
+  # This is fixed a priori! It's not the estimate. While computing the metrics we are not interested in an estimate,
+  # rather we are interested in the true (underlying) mean. "Isn't that cheating?", one might ask.
+  # In the real world: yes. But we are evaluating a methodology, not the methodology results per se.
+  
+  for (m in 1:M) {
+    
+    # Calculate the intervals
+    results <- compute_simulated_bounds(timesteps, alpha, distribution_name, true_mean, num_new_samples_at_each_t = num_new_samples_at_each_t)
+    # Metrics are (coverage_proportion, mean interval length, lower_bound_deviation, upper_bound_deviation)
+
+    metrics_na[m,] <- compute_metrics(results[,4], results[,5], true_mean)     # Non asymptotic bounds metrics
+    metrics_a[m,] <- compute_metrics(results[,6], results[,7], true_mean)      # Asymptotic bounds
+    metrics_cheby[m,] <- compute_metrics(results[,8], results[,9], true_mean)  # Chebyshev bounds
+    metrics_hoeff[m,] <- compute_metrics(results[,10], results[,11], true_mean)# Hoeffding bounds
+    metrics_gauss[m,] <- compute_metrics(results[,12], results[,13], true_mean)# Gaussian bounds
+    
+    simulation_result <- simulation_result + results
+  }
+  
+  simulation_result <- simulation_result / M
+
+  simulation_results <- list(
+    SimulatedBounds = simulation_result,
+    MetricsNA = metrics_na,
+    MetricsA = metrics_a,
+    MetricsChebyshev = metrics_cheby,
+    MetricsHoeffding = metrics_hoeff,
+    MetricsGaussian = metrics_gauss
+  )
+  
+  return(simulation_results)
+}
+```
+
+### Defining the metrics
+
+Finally, the last thing we need in our statistics toolbox. Some metrics
+to evaluate the performance of the methodology. Let's see how they are
+defined, in R of course:
+
+```{r metrics}
+#---------------------------------------------------
+compute_cumulative_coverage_prob <- function(lower_bounds_seq, upper_bounds_seq, true_mean){
+  num_timesteps <- length(lower_bounds_seq) # We could pass it by argument but we can also infer it since 2 args are vectors
+  coverage <- (1) * ( (lower_bounds_seq <= true_mean) & (true_mean <= upper_bounds_seq))# is it inside the bounds?
+  proportion <- (sum(coverage) / num_timesteps) # get the proportion of correct guesses - yes, we lose a bit of info: the timesteps - but we trust the simulation!
+  return(proportion)
+}
+
+#---------------------------------------------------
+compute_running_interval_length <- function(simulated_lower_bounds, simulated_upper_bounds){
+  mean_interval_length <- mean(abs(simulated_upper_bounds - simulated_lower_bounds)) # Average differrence for all timesteps..
+  return(mean_interval_length)
+}
+
+#---------------------------------------------------
+compute_cumulative_deviation <- function(simulated_lower_bounds, simulated_upper_bounds, true_mean){
+  cumulative_deviation = 0
+  for (i in seq_along(simulated_lower_bounds)) {
+    if (true_mean < simulated_lower_bounds[i]) {
+      deviation = simulated_lower_bounds[i] - true_mean
+      cumulative_deviation = cumulative_deviation + deviation
+    }
+    else if (true_mean > simulated_upper_bounds[i]) {
+      deviation = true_mean - simulated_upper_bounds[i]
+      cumulative_deviation = cumulative_deviation + deviation
+    }
+  }
+  return(cumulative_deviation)
+}
+
+#---------------------------------------------------
+compute_metrics<- function(simulated_lower_bounds, simulated_upper_bounds, true_mean){
+  
+  res <- rep(NA, 4)
+
+  coverage_proportion <- compute_cumulative_coverage_prob(simulated_lower_bounds, simulated_upper_bounds, true_mean)
+  running_interval_length <- compute_running_interval_length(simulated_lower_bounds, simulated_upper_bounds)
+  cumulative_deviation <- compute_cumulative_deviation(simulated_lower_bounds, simulated_upper_bounds, true_mean)
+
+  res[1] <- coverage_proportion
+  res[2] <- running_interval_length
+  res[3] <- cumulative_deviation
+  return(res)
+}
+
+```
+
+The function `compute_cumulative_coverage_prob (... )` is designed to compute the *"Cumulative Coverage Probability"* metric, which reflects the cumulative probability of correctly capturing the actual mean within a series of confidence intervals over various time intervals. An output value of 1 means perfect coverage probability, while a value approaching 0 suggests that the bounds fail to accurately estimate the actual mean.
+
+By subtracting the cumulative coverage probability from 1, we can obtain the *"Cumulative Miscoverage Probability"*. In this context, an output of 0 is considered optimal.
+
+The `compute_running_interval_length(...)` function is designed to calculate the *"Running Interval Lenght"*, that is the average size of intervals at different time steps. To perform this metric, we determine the mean absolute difference between the upper and lower bounds of the intervals across all time steps. This metric holds crucial importance associated with the cumulative coverage probability as it provides a more in-depth assessment of the accuracy of intervals in terms of coverage. 
+Furthermore, when two intervals are equal concerning the cumulative coverage probability, priority is given to intervals with a shorter average length.
+
+The function `compute_cumulative_deviation(...)` is designed to compute the *"Cumulative Deviation"* metric. This metric provides an indication not only of the intervals' ability to correctly capture the true mean value but also of how much they deviate when the actual mean diverges from the confidence intervals. It enables the identification and preference of intervals that, despite having a similar cumulative coverage probability, demonstrate lower cumulative deviation. 
+
+Finally, the `compute_metrics(...)` function allows us to combine these three metrics, returning a vector.
+
+### Simulating from a Standard Normal
+
+Let's see how everything we have written so far works!
+
+```{r simulation_with_normal}
+
+# Simulation parameters --------------------------------------------------
+timesteps <- seq(1, 10)
+simulation_steps <- 1e3
+alpha <- 0.05
+new_samples_each_t <- 10
+
+
+
+# Simulation for Normal Distribution -------------------
+distro_name <- "Normal"
+underlying_mean <- calculate_theoretical_mean(distro_name)
+sim_res <- compute_simulation(timesteps = timesteps, 
+                              M = simulation_steps, 
+                              alpha = alpha, 
+                              num_new_samples_at_each_t = new_samples_each_t,
+                              distribution_name = distro_name, 
+                              true_mean = underlying_mean)
+
+# Plot of different CSs/CIs 
+plot_bounds(sim_res, timesteps = timesteps, distribution_name = distro_name, 
+            true_mean = underlying_mean, new_samples_each_t = new_samples_each_t,
+            title = "Different CSs/CIs for Normal Distribution")
+
+# Performance Evaluation Table
+normal_miscoverage_prob <- c(mean(sim_res$MetricsNA[,1]), 
+                           mean(sim_res$MetricsA[,1]),
+                           mean(sim_res$MetricsChebyshev[,1]),
+                           mean(sim_res$MetricsHoeffding[,1]),
+                           mean(sim_res$MetricsGaussian[,1]))
+
+normal_running_interval_length <- c(mean(sim_res$MetricsNA[,2]), 
+                                  mean(sim_res$MetricsA[,2]),
+                                  mean(sim_res$MetricsChebyshev[,2]),
+                                  mean(sim_res$MetricsHoeffding[,2]),
+                                  mean(sim_res$MetricsGaussian[,2]))
+
+normal_cumulative_deviation <- c(mean(sim_res$MetricsNA[,3]), 
+                               mean(sim_res$MetricsA[,3]),
+                               mean(sim_res$MetricsChebyshev[,3]),
+                               mean(sim_res$MetricsHoeffding[,3]),
+                               mean(sim_res$MetricsGaussian[,3]))
+
+normal_comparison_table <- compute_metrics_table(normal_miscoverage_prob, normal_running_interval_length,
+                                               normal_cumulative_deviation)
+
+kable(normal_comparison_table, format = "markdown", caption = 'CSs/CIs Performance Evaluation for Normal Distribution')
+```
+
+While simulating different CSs/CIs on the Normal Distribution, we have observed that all of them adeptly estimate the true mean, yielding a cumulative coverage probability of 1 and a cumulative deviation of 0. Consequently, our focus shifts to evaluating the measure of interval length to determine which confidence intervals demonstrate best performance. Notably, our simulation reveals that the **Hoeffding CI**, with an interval length of 1.363805, results to be the best choice for estimating the actual mean in the context of the Normal Distribution.
+
+### Simulating from a Beta
+
+```{r simulating_from_beta}
+# Simulation for Beta Distribution ----------------------------------------
+distro_name <- "Beta"
+underlying_mean <- calculate_theoretical_mean(distro_name)
+sim_res <- compute_simulation(timesteps = timesteps, 
+                              M = simulation_steps, 
+                              alpha = alpha, 
+                              num_new_samples_at_each_t = new_samples_each_t,
+                              distribution_name = distro_name, 
+                              true_mean = underlying_mean)
+
+# Plot of the different CSs/CIs 
+plot_bounds(sim_res, timesteps = timesteps, distribution_name = distro_name, 
+            true_mean = underlying_mean, new_samples_each_t = new_samples_each_t,
+            title = "Different CSs/CIs for Beta Distribution")
+
+# Performance Evaluation Table
+beta_miscoverage_prob <- c(mean(sim_res$MetricsNA[,1]), 
+                           mean(sim_res$MetricsA[,1]),
+                           mean(sim_res$MetricsChebyshev[,1]),
+                           mean(sim_res$MetricsHoeffding[,1]),
+                           mean(sim_res$MetricsGaussian[,1]))
+
+beta_running_interval_length <- c(mean(sim_res$MetricsNA[,2]), 
+                                 mean(sim_res$MetricsA[,2]),
+                                 mean(sim_res$MetricsChebyshev[,2]),
+                                 mean(sim_res$MetricsHoeffding[,2]),
+                                 mean(sim_res$MetricsGaussian[,2]))
+
+beta_cumulative_deviation <- c(mean(sim_res$MetricsNA[,3]), 
+                              mean(sim_res$MetricsA[,3]),
+                              mean(sim_res$MetricsChebyshev[,3]),
+                              mean(sim_res$MetricsHoeffding[,3]),
+                              mean(sim_res$MetricsGaussian[,3]))
+
+beta_comparison_table <- compute_metrics_table(beta_miscoverage_prob, beta_running_interval_length,
+                                              beta_cumulative_deviation)
+
+kable(beta_comparison_table, format = "markdown", caption = 'CSs/CIs Performance Evaluation for Beta Distribution')
+```
+
+While conducting simulations on the Beta Distribution using various CSs/CIs, we observe that almost all CSs/CIs accurately estimate the true mean, except for Gaussian one, whose cumulative deviation value is not at 0. Considering the measure of interval length, we notice that the **Asymptotic CIs** outperforms others CSs/CIs when applied to the Beta Distribution context, with an interval length of 0.9688745.
+
+### Simulating from Exponential
+
+```{r simulation_from_exponential}
+# Simulation for Exponential Distribution ---------------------------------
+distro_name <- "Exponential"
+underlying_mean <- calculate_theoretical_mean(distro_name)
+sim_res <- compute_simulation(timesteps = timesteps, 
+                              M = simulation_steps, 
+                              alpha = alpha, 
+                              num_new_samples_at_each_t = new_samples_each_t,
+                              distribution_name = distro_name, 
+                              true_mean = underlying_mean)
+
+# Plot of the different CSs/CIs
+plot_bounds(sim_res, timesteps = timesteps, distribution_name = distro_name, 
+            true_mean = underlying_mean, new_samples_each_t = new_samples_each_t,
+            title = "Different CSs/CIs for Exponential Distribution")
+
+# Performance Evaluation Table
+exp_miscoverage_prob <- c(mean(sim_res$MetricsNA[,1]), 
+                          mean(sim_res$MetricsA[,1]),
+                          mean(sim_res$MetricsChebyshev[,1]),
+                          mean(sim_res$MetricsHoeffding[,1]),
+                          mean(sim_res$MetricsGaussian[,1]))
+
+exp_running_interval_length <- c(mean(sim_res$MetricsNA[,2]), 
+                                 mean(sim_res$MetricsA[,2]),
+                                 mean(sim_res$MetricsChebyshev[,2]),
+                                 mean(sim_res$MetricsHoeffding[,2]),
+                                 mean(sim_res$MetricsGaussian[,2]))
+
+exp_cumulative_deviation <- c(mean(sim_res$MetricsNA[,3]), 
+                              mean(sim_res$MetricsA[,3]),
+                              mean(sim_res$MetricsChebyshev[,3]),
+                              mean(sim_res$MetricsHoeffding[,3]),
+                              mean(sim_res$MetricsGaussian[,3]))
+
+exp_comparison_table <- compute_metrics_table(exp_miscoverage_prob, exp_running_interval_length,
+                                              exp_cumulative_deviation)
+
+kable(exp_comparison_table, format = "markdown", caption = 'CSs/CIs Performance Evaluation for Exponential Distribution')
+```
+
+While conducting simulations on the Exponential Distribution using various CSs/CIs, we observe that almost all CSs/CIs accurately estimate the true mean, except for Gaussian and Hoeffding ones, whose cumulative deviation value is not at 0. At the end, our simulation reveals that the **Non-asymptotic CSs**, with an interval length of 3.569917, results to be the best choice for estimating the mean in the context of the Exponential Distribution.
+
+### More simulations!
+
+Let's consider once again the base case. We have a standard gaussian, so we know
+the 1d-subgaussian distro constraint is satisfied. How can we test the model a bit? 
+
+Sure, we could grid-search over "almost all" the parameter space. But let's considered two
+situations we discovered so far that introduces some difficulty in the estimation process:
+- Low simulation size
+- Low increase in population at each timestep
+
+
+```{r }
+# Simulation on parameter new_samples_each_t -------------------------------
+distro_name <- "Normal"
+timesteps = 1:20
+
+
+underlying_mean <- calculate_theoretical_mean(distro_name)
+new_samples_each_t_values = c(1, 20)
+
+for(value in new_samples_each_t_values){
+  sim_res <- compute_simulation(timesteps = timesteps, 
+                                M = 1e3, 
+                                alpha = alpha, 
+                                num_new_samples_at_each_t = value,
+                                distribution_name = distro_name, 
+                                true_mean = underlying_mean)
+  
+  par(mfrow = c(1,2))
+  plot_histo(sim_res$MetricsNA[,1], value, "Non-asymptotic CSs", distro_name)
+  plot_histo(sim_res$MetricsHoeffding[,1], value, "Hoeffding CSs", distro_name)
+}
+```
+
+Soo.... what happened here? Even though it might be a bit harder to see, the Non-Asymptotic bounds are almost perfect!
+So, could we just say they are the preferred technique for interval estimation? **NO**.
+
+There is a *tradeoff* involved here. There's a very basic example I heard from a previous professor: consider the "problem" to be estimating the width of a table. 
+- One person says the width of the table is between 0.001m and 900m. 
+- Another person says it's between 3.1m and 4.5m
+
+Who would you say is right?
+
+That's exactly the same problem, although probably not as extreme: is it better to be right or to be accurate?
+
+We observed that Non-Asymptotic bounds provide us with most probably a correct answer, capturing the correct mean inside their bounds, and therefore satisfying the $1-\alpha$ condition we set. But the bounds might be so large, that they are not useful at all! Conversely, the Hoeffding bounds were tighter. But might not capture the mean, which tends to happen for smaller sample sizes and simulation sizes.
+
+
+### Simulation size vs. Timesteps
+
+Another peculiar behavior is found when changing simulation size, but also when increasing the population size slowly. For now we have operated under the assumption that our data behaves well, and each sample increment is significant enough to bring the well-behaved asymptotic properties through which we make estimation. But what happens when the population increases slowly? What happens for fewer simulations? That is exactly what we hope to see now!
+
+```{r plot_bounds_v2, echo = FALSE}
+plot_results_v2 <- function(df_nab, df_ab, df_cheby, df_hoeff, df_gaussian_ci, title, true_mean, estimated_mean, dummy_means) {
+  plot(df_nab$x, df_nab$F, ylim = c(-5,5), type = "l", xlab = "t", ylab = "Mean Estimate", main = title)
+  polygon(c(df_nab$x, rev(df_nab$x)), c(df_nab$L, rev(df_nab$U)), col = "grey75", border = FALSE)
+
+  lines(df_nab$x, rep(true_mean, length(df_nab$x)), lwd = 2, lty = 2, col = "black")
+  #points(df_nab$x, estimated_mean, lwd = 1, pch = 10)
+  
+  lines(df_nab$x, df_nab$U, col = "red", lty = 2)
+  lines(df_nab$x, df_nab$L, col = "red", lty = 2)
+  
+  lines(df_ab$x, df_ab$U, col="blue",lty=2)
+  lines(df_ab$x, df_ab$L, col="blue",lty=2)
+  
+  lines(df_cheby$x, df_cheby$U, col="green",lty=2)
+  lines(df_cheby$x, df_cheby$L, col="green",lty=2)
+  
+  lines(df_hoeff$x, df_hoeff$U, col="yellow",lty=2)
+  lines(df_hoeff$x, df_hoeff$L, col="yellow",lty=2)
+  
+  lines(df_gaussian_ci$x, df_gaussian_ci$U, col="purple",lty=2)
+  lines(df_gaussian_ci$x, df_gaussian_ci$L, col="purple",lty=2)
+  
+  lines(df_nab$x, dummy_means) 
+
+  legend("bottomright", legend=c("True mean", "Simulated mean",
+                                "Non-asymptotic CSs", "Asymptotic CSs", 
+                                 "Chebyshev CIs", "Hoeffding CIs", "Gaussian CIs"), 
+         col=c("grey75", "black", "red", "blue", "green", "yellow", "purple"), lty=rep(2, 4), lwd=rep(1, 4), 
+         cex=0.4, box.lty=0, xjust = 1, yjust = 1)
+}
+
+plot_bounds_v2 <- function(sim_res, timesteps, distribution_name, true_mean, new_samples_each_t, title){
+
+    # Put bounds into dataframes
+    bounds_per_timestep <- sim_res$SimulatedBounds
+    
+    dummy_samples = c(generate_samples(new_samples_each_t * length(timesteps), distribution_name))
+    dummy_means = rep(NA, length(timesteps))
+
+    for(idx in 1:(length(timesteps))){
+        dummy_samples = c(dummy_samples, generate_samples(new_samples_each_t, distribution_name))
+
+        dummy_means[idx] = mean(dummy_samples)
+    }
+
+    true_mean <- true_mean        # Just so we remember that we have it :)
+    estimated_mean <- bounds_per_timestep[,2] # And of course the estimated mean from the sampling process
+
+    df_exp_na_bounds <- data.frame(x = timesteps, F = bounds_per_timestep[, 2], L = bounds_per_timestep[, 4], U = bounds_per_timestep[, 5])
+    df_exp_a_bounds <- data.frame(x = timesteps, L = bounds_per_timestep[, 6], U = bounds_per_timestep[, 7])
+    df_exp_cheby_bounds <- data.frame(x = timesteps, L = bounds_per_timestep[, 8], U = bounds_per_timestep[, 9])
+    df_exp_hoeffding_bounds <- data.frame(x = timesteps, L = bounds_per_timestep[, 10], U = bounds_per_timestep[, 11])
+    df_exp_gaussian_bounds <- data.frame(x = timesteps, L = bounds_per_timestep[, 12], U = bounds_per_timestep[, 13])
+
+    plot_results_v2(df_exp_na_bounds, df_exp_a_bounds, df_exp_cheby_bounds, df_exp_hoeffding_bounds, df_exp_gaussian_bounds, title, true_mean, estimated_mean,      dummy_means)
+}
+```
+
+```{r simulate_low_M_low_pop_size}
+
+timesteps <- seq(1, 20)
+simulation_steps <- 1e2
+alpha <- 0.05
+
+# Simulation for Normal Distribution -------------------
+distro_name <- "Normal"
+underlying_mean <- calculate_theoretical_mean(distro_name)
+
+par(mfrow = c(2, 2))
+for(new_samples_each_t in c(2,100)){
+  for(sim_size in c(1, 100)){
+    sim_res <- compute_simulation(timesteps = timesteps, 
+                                  M = sim_size, 
+                                  alpha = alpha, 
+                                  num_new_samples_at_each_t = new_samples_each_t,
+                                  distribution_name = distro_name, 
+                                  true_mean = underlying_mean)
+    
+    # Plot of different CSs/CIs 
+    plot_bounds_v2(sim_res, timesteps = timesteps, distribution_name = distro_name, 
+                true_mean = underlying_mean, new_samples_each_t = new_samples_each_t,
+                title = sprintf("M = %d, delta sample size = %d", sim_size, new_samples_each_t))
+  }
+}
+```
+So from what we can see, it's the sample size that smooths out the bounds - more so than the simulation size!
+
+### A few final comments.
+
+It's interesting to consider the possibility to include the cumulative deviations of the bounds
+from the true mean as we might prefer a "stricter" - tighter - which results in a few more deviations
+rather than keeping larger bounds (maybe too large!).
+
+Question: Why do we use the `compute_running_interval_length`?
+We want to see how large, on average (meaning across all t), the intervals get.
+Why do we have the cumulative peak deviation?
+Because we assume the bounds are not symmetric L != U and we thought it might
+be interesting to study, or at least consider.
+
+From the results obtained in the simulations, considered three 1-sub-Gaussian distributions, 
+we can conclude that Non-Asymptotic and Asymptotic Confidence Sequences (CSs) have achieved 
+very good performance compared to traditional methods for calculating Hoeffding, Chebyshev, and Gaussian intervals. 
+Indeed, the two CIs exhibited superior performance in two out of the three analyzed distributions, achieving a cumulative coverage probability of 1 (and a corresponding cumulative deviation of 0) and maintaining an overall sufficiently small average interval length in all three distributions.
+
+# Exercise 2 - Environmental Sound Levels and Mood
+
+## Introduction
+
+Environmental sound levels refer to the intensity of different types of sounds in various environments, usually measured in decibels (dB), and provide a clear indication of the acoustic quality of a space. The levels assumed can range from very low (below 10 dB) to extremely high (over 140 dB), where exposure to noise levels above 140 dB is very dangerous since it might take just one time to cause damage to hearing.
+
+Some typical sound levels measured in dB [@noiseawareness2024] are:
+
+-   0 dB: The softest sound a person can hear with normal hearing.
+
+-   10 dB: Normal breathing.
+
+-   20 dB: Whispering at 5 feet.
+
+-   30 dB: Soft whisper.
+
+-   50 dB: Rainfall.
+
+-   60 dB: Normal conversation.
+
+-   110 dB: Shouting in the ear.
+
+-   120 dB: Thunder.
+
+Although there is no direct connection between ambient sound levels and mood changes, some types of environmental sounds can significantly affect an individual's emotional state. 
+
+Negative mood changes can be caused by low frequency and high amplitude sounds. On the other hand, when sound is soft and high-frequency, it has a positive impact on mood and can be used therapeutically to treat anxiety, depression, and other mental health disorders. [@mallikrusso2022]
+
+Within scientific literature, the correlation between environmental sound levels and human mood holds considerable significance. For instance, investigating the impact of urban noise on citizens' well-being can result in essential improvements, such as the implementation of new regulations regarding urban noise in cities and the introduction of white noise machines to mitigate noise pollution [@leijssen2019].\
+Taking into account what we said, it is important to consider the physical environment and emotional impact of sound on occupants while designing spaces. To improve the overall well-being and productivity in the built environment, it is crucial to address potential negative sound impacts and incorporate sound design elements.
+
+## Data background and collection
+
+Data collection is the systematic process of gathering information for a specific purpose.\
+In our case, we aim to design a sequential "self-experiment" titled ***Environmental Sound Levels and Mood*** to investigate the relationship between environmental sound levels and mood over 2 weeks. We decided to pick as the population of interest our SDS team members (Livia, Laura, Marco and Marina), and we choose both phone app and a Technical Standard ^[Technical standards are usually formal documents that establish uniform engineering or technical criteria, methods, processes, and practices [@wikitechstd2024]. This standard is used to quantify exposure-response relationships between noise exposure and annoyance, providing a framework for defining and measuring noise annoyance [@nsftechstandards2018]] as a tool to record and measure data for our experiment.
+
+Since there are multiple phone apps that track the mood ("Daylio", "Moodpath", "MoodKit" or "DailyBean") we decided to try a couple of them and at the end we selected *Daylio* to collect the data that we will need for our self-experiment. \
+We picked *Daylio* [@Daylio] due to its simplicity and intuitiveness, and also for the fact that the data can be exported in csv. The app even provides monthly and annual analysis of the recorded mood, with a a 5-items scale, over the days.
+
+
+
+| ![*Mood chart*](./images/moodchart.jpg.jpeg){} | ![*Average daily mood*](./images/avg daily mood.jpg.jpeg){width=90%} |
+|---|---|
+
+## Methodology
+
+Since the ISO/TS 15666 - the noise annoyance standard - has been used for 20 years to address the psychological effects of noise we decided to use it to measure the perceived Environmental Sound Level, tailoring it on 2-weeks period of time. This Technical Standard is used to quantify exposure-response relationships between noise exposure and annoyance internationally.[@iso156662021]
+
+We decided to collect the mood data by logging them into the application 3 times at day, during the following time slots:
+
+-   Morning 10/11
+-   Afternoon 15/16
+-   Evening 20/21 
+
+The collected data consist of how each person feels in that period of the day, following a 5-item scale ("Excellent", "Good", "So and so", "Bad", "Terrible").
+
+<center>
+![Different moods](./images/mood_scale.jpeg){width=60%}
+</center>
+
+For the Environmental Sound Level we adapted the ISO/TS 15666 ***Numerical Rating Scale Question*** to get daily measurements: 
+
+*Thinking about today, what number from 0 to 10 best shows how much you are bothered, disturbed or annoyed by (source) noise?* 
+
+This uses a 0-to-10 opinion scale for how much (source) noise bothers, disturbs or annoys you. If you are not at all annoyed choose 0; if you are extremely annoyed choose 10; if you are somewhere in between, choose a number between 0 and 10. [@phind2024]
+
+Also, since the mood application (Daylio) provides a "rapid note" option and the possibility to export all the recorded data in csv format, we decided to insert into the notes the environmental sound level measurements so that the information would appear in the overall csv. 
+
+From the data collection method and other characteristics of our population of interest we can say that we won't face an IID sampling scheme. In fact, collecting data from the same people at the same 3 times of the day each day over a period of 2 weeks, might introduce dependencies among the samples and also doesn't guarantee that the sampling is identically distributed. \
+Therefore, we will take into account the dependency and use some techniques that can help with it, for example multivariate methods.
+
+## Research hypothesis
+
+With the data we collected our objective will be to find if there is any statistically significant relationship between Environmental Sound Level and mood, over a period of 2 weeks. \
+For this purpose we will employ the mood prevalence as the population parameter that we will estimate. Obtaining information on how Environmental Sound Levels affect the overall mood can be achieved by monitoring the prevalence of different moods over time, and can give us an idea of how environmental sound levels might affect it. \
+We assume that higher noise levels lead to a higher prevalence of negative moods compared to lower noise levels.
+
+The population parameter will be compared with the Environmental Sound Level measurement divided into 3 levels: low, medium and high noise group. To divide the scale into high, medium, and low groups, we can follow a common approach where you assign thirds of the scale to each group.
+
+For a 0-to-10 scale, as it is in our Technical Standard Numerical Rating Scale Question ^[ISO/TS 15666 - the noise annoyance standard], this would mean:
+
+* *Low Noise Group*: Answers from 0 to 3. This represents the lowest level of annoyance or disturbance from noise.
+* *Medium Noise Group*: Answers from 4 to 7. This represents a moderate level of annoyance or disturbance from noise.
+* *High Noise Group*: Answers from 8 to 10. This represents the highest level of annoyance or disturbance from noise. [@phind2024]
+
+
+## Analysis plan
+
+To see if there is any statistically significant relationships between mood and ELS we can employ:
+
+1)  **Confidence Sequences (CSs)**: \
+These sequences continuously monitor and estimate the correlation between sound levels and mood, and rely on IID sampling assumption. Taking this into account we have to consider that, since our data are violating the IID assumption, the estimates provided might not be reliable. Moreover, when using CSs we have to remember that the data measurements need to be consistent and to be continuously updated. In general it could be a problem because you have to continuously take measurements and be consistent with it, but it shouldn't be one for us.
+
+2)  **Correlation**: \
+It is used to determine if there is a linear relationship between two variables, but it doesn't account for dependencies.
+
+3) **Non-linear regression**: \
+Can be used if the relationship between two variables is not linear and, as the correlation, it does not account for dependencies.
+
+Since all the 3 above methods do not take into account the data dependency, to overcome this problem we thought about using multivariate methods that can handle dependencies among variables. \
+Additionally, when conducting a study, is good practice to check for confounding factors. Since our population of interest is composed by young healthy people we don't really need to worry about the age being a potential confounder, while if our population of interest consisted of individuals in a more advanced age range it would have been wise to worry about the possibility for it to be a confounder.
+
+## Intervention
+
+Considering the importance of managing noise levels and their impact on mood, it is important to look into potential solutions that could mitigate the negative effects of high noise levels. One approach we could go for is sound therapy, in particular using 432 Hz frequency, that has been shown to have a positive impact on mood by a study on the effects of music & auditory beat stimulation on anxiety @mallikrusso2022. \
+Our experiment proposes the use of sound frequency therapy at 432 Hz as a potential intervention to assist people in coping with high ambient sound levels, but it's important to be cautious with this approach as individual frequency responses may vary. 
+
+After conducting the experiment the Average Treatment effect can be used to see whether the intervention has worked or not.
+
+\newpage
+
+## References

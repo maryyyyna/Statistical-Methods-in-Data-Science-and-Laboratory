@@ -1,0 +1,835 @@
+---
+title: "Homework 3"
+author: "Laura Thoft Cesario, Livia Oddi, Marco Muscas, Marina Iuliana Aur"
+date: "Feb 2024"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    number_sections: false
+    theme: paper
+    highlight: tango
+    code_folding: show
+  pdf_document:
+    toc: true
+    toc_depth: '3'
+bibliography: citations.bib
+link-citations: true
+csl: nature.csl
+editor_options:
+  markdown:
+    wrap: 72
+---
+
+# Exercise 1 - Saving time!
+
+## Introductory
+
+In this exercise we want to start with a more intuitive understanding of
+the problem and see how this fits into the definitions of Shapley
+values, characteristic functions and so on.
+
+We can start with a brief reformulation of the initial question of the
+exercise.
+
+We have our three players, Antwohnette (A), BadellPadel (B) and
+Chumbawamba (C) along with their respective work schedules:
+
+| Letter |    Name     |     Hours     |
+|:------:|:-----------:|:-------------:|
+|  $A$   | Antwohnette | 14:00 - 17:00 |
+|  $B$   | BadellPadel | 11:00 - 16:00 |
+|  $C$   | Chumbawamba | 09:00 - 13:00 |
+
+The goal here is to complete a homework, optimizing their work schedule
+and saving time. But what does that mean?
+
+**The intuition**: They do not need (nor want) to all work at the same
+time! They save time whenever someone else can pick up their work.
+Therefore the students can only exist in two states: *working* and *save
+hour* (i.e. sleeping). If we try to see what their typical working day
+looks like, here it is:
+
+|                 | 9-10 | 10-11 |   11-12   |   12-13   | 13-14 |   14-15   |   15-16   | 16-17 |
+|:------:|:------:|:------:|:------:|:------:|:------:|:------:|:------:|:------:|
+| **Antwohnette** |      |       |           |           |       |   WORK    |   WORK    | WORK  |
+| **BadellPadel** |      |       |   WORK    |   WORK    | WORK  | SAVE HOUR | SAVE HOUR |       |
+| **Chumbawamba** | WORK | WORK  | SAVE HOUR | SAVE HOUR |       |           |           |       |
+
+Take **Chumbawumba** for example - their working hours end at 13:00, but
+**BadellPadel** starts theirs at 11:00. So our dear Chumbawumba can
+sleep while BadellPadel works - therefore saving two hours of work.
+
+From this intuition we can build the characteristic function
+$\nu (\cdot)$. From the table, it can be deduced that $\nu(AB)=2$,
+$\nu(BC)=2$, and $\nu(CA)=0$. Given that $\nu(A)=\nu(B)=\nu(C)=0$ and
+$\nu(ABC)=4$, we can calculate the marginal contribution of each player
+by applying the definition of $\nu$ for a given permutation of the
+$\{A,B,C\}$ set.
+
+|  Permutation  |             Antwohnette              |             BadellPadel              |             Chumbawamba              |
+|:----------------:|:----------------:|:-----------------:|:----------------:|
+|   $(A,B,C)$   |                **0**                 |  $\nu(AB) - \nu(A)$ = 2 - 0 = **2**  | $\nu(ABC) - \nu(AB)$ = 4 - 2 = **2** |
+|   $(A,C,B)$   |                **0**                 | $\nu(ACB) - \nu(AC)$ = 4 - 0 = **4** |  $\nu(AC) - \nu(A)$ = 0 - 0 = **0**  |
+|   $(B,A,C)$   |  $\nu(BA) - \nu(B)$ = 2 - 0 = **2**  |                **0**                 | $\nu(BAC) - \nu(BA)$ = 4 - 2 = **2** |
+|   $(B,C,A)$   | $\nu(BCA) - \nu(BC)$ = 4 - 2 = **2** |                **0**                 |  $\nu(BC) - \nu(B)$ = 2 - 0 = **2**  |
+|   $(C,A,B)$   |  $\nu(CA) - \nu(C)$ = 0 - 0 = **0**  | $\nu(CAB) - \nu(CA)$ = 4 - 0 = **4** |                **0**                 |
+|   $(C,B,A)$   | $\nu(CBA) - \nu(CB)$ = 4 - 2 = **2** |  $\nu(CB) - \nu(C)$ = 2 - 0 = **2**  |                **0**                 |
+| **TOT VALUE** |                **6**                 |                **12**                |                **6**                 |
+
+The values in the table are the marginal contribution of each player
+with respect to the permutation $\pi$ we are considering. The values are
+computed by the following formula that measures how much player j
+increases the value of the coalition consisting of its predecessor in
+$\pi$:
+$$\Delta^G_\pi(j)= \nu( S_\pi\{j\} \cup \{j\})- \nu( S_\pi\{j\})$$ We
+are subtracting from the characteristic function value associated to the
+set of all predecessors of player j included the j-th,
+$\nu( S_\pi\{j\} \cup \{j\})$, the characteristic function value
+associated to the set of all predecessors of player j excluded the j-th,
+$\nu( S_\pi\{j\})$.
+
+Considering the following formula, we compute **Shapley** for every
+player:
+$$\psi^G(j)=\mathbb{E}(\Delta^G_\pi(j))=\frac{1}{p!}\sum_{\pi\in \Pi_p}\Delta^G_\pi(j)$$
+Where the marginal contribution $\Delta_{\pi}^{G}$ is calculated with
+respect to the given permutation $\pi$ and $p$ is the cardinality of the
+player set $\mathcal{P}$.
+
+|             |           A           |           B            |           C           |
+|:----------------:|:----------------:|:-----------------:|:----------------:|
+| $\psi^G(j)$ | $\psi(A)=\frac{6}{6}$ | $\psi(B)=\frac{12}{6}$ | $\psi(C)=\frac{6}{6}$ |
+| **Shapley** |         **1**         |         **2**          |         **1**         |
+
+# Exercise 2 - Experimenting with stocks!
+
+## Section 2.1 - Computing closing price
+
+Our aim is to create a comprehensive **portfolio of stocks** during the
+Covid-19 pandemic, covering the period from January 1, 2020, to the end
+of 2023. We will select a reasonable number of stocks '*p*', and focus
+on collecting their daily closing prices, from which we will compute the
+relative price $x_{t,j}$:
+
+$$x_{t,j}=log(c_{t,j}/c_{t-1,j})$$
+
+This relative price, broadly speaking, represents the factor by which
+the wealth/money invested in the j-th stock increases during the t-th
+period, and is used to evaluate the performance of a stock.
+
+The stocks we consider are taken from each of the **Global Industry
+Classification Standard** (GICS) sectors to provide broad portfolio
+diversification. These sectors include *Consumer Discretionary*,
+*Energy*, *Financials*, *Materials*, *Health Care*, *Utilities*,
+*Industrials*, *Information Technology* and *Consumer Staples*.
+
+Our strategy involves selecting 10 stocks from the GICS sectors,
+considering that the Shapley formula takes into account covariance
+between stocks:
+
+$$\psi(j)^G=E(X_j)-w*Cov(X_j,R_p)=E(X_j)-w*\sum_{r=1}^pCov(X_j,X_r)$$
+Taking into account the weight $w>0$ and $j\in\{1...p\}$, we diversify
+across sectors to reduce the impact of covariance on individual stock
+values, as the value of each stock decreases with the dependency between
+stock returns. This approach aims to minimize the adverse effects of
+stock return dependency, particularly on the Shapley value of a specific
+player *j*, by diversifying our investments across various sectors.
+
+The following script extracts stock information from a CSV file named
+'*constituents.csv*'. The objective is to create a portfolio that covers
+a diverse range of sectors by specifying the sectors of interest and
+limiting the number of stocks to ten per sector
+('*max_number_of_stocks_per_sector*'). This approach increases the
+overall value and utility of the portfolio.
+
+```{r warning=FALSE, include=FALSE}
+library("zoo")
+
+suppressMessages( require(tseries, quietly = TRUE) )
+options("getSymbols.warning4.0" = FALSE)
+```
+
+```{r echo=TRUE, warning=FALSE}
+get_stocks <- function(csv_path, 
+                       sectors, 
+                       max_number_of_stocks_per_sector = 5, 
+                       start_date = "2020-01-01", 
+                       end_date = "2023-12-31"){
+  
+  stocks_table <- read.csv(csv_path, sep = ",", header = T)
+  stocks_table <- stocks_table[stocks_table$Date.added < "2020-01-01",]
+  
+  stock_symbols <- c()
+  valid_stock_symbols <- c() # Not all codes may be valid (and therefore downloaded. 
+                             # Save the valid ones here.)
+  dates <- NULL
+  stocks <- c()
+  sector_stocks <- list()
+  
+  for(sector in sectors){
+    stocks_by_sector <- stocks_table$Symbol[stocks_table$GICS.Sector == sector]
+    
+    if(length(stocks_by_sector) > 0){
+      max_index = min(max_number_of_stocks_per_sector, length(stocks_by_sector))  # Maybe the sector has less than the wanted number of stocks?
+      
+      stock_symbols = c(stock_symbols, stocks_by_sector[1:max_index])
+      sector_stocks[[sector]] <- stocks_by_sector[1:max_index]
+    }
+  }
+  
+  for(stock_sym in stock_symbols){
+    
+    stock_error <- FALSE
+    tryCatch(expr = { 
+      stock_timeseries <- get.hist.quote(instrument= stock_sym, start= start_date, end = end_date, 
+                                         quote= c("Open", "Close"), provider="yahoo", drop=TRUE, quiet = TRUE)
+    }, error = function(e){ stock_error <- TRUE})
+    
+    tryCatch(expr = {dummy  <- stock_timeseries$Close}, error = function(e){stock_error <- TRUE})
+    
+    if(stock_error == FALSE){
+      stocks <- cbind(stocks, as.numeric(stock_timeseries$Close))
+      valid_stock_symbols <- c(valid_stock_symbols, stock_sym)
+      
+      if(is.null(dates)){
+        dates <- as.character(time(stock_timeseries[,0])) # The index contains all dates!
+        
+      }
+    }
+  }
+  colnames(stocks) <- valid_stock_symbols
+  rownames(stocks) <- dates
+  
+  return(list(stocks = stocks, sector_stocks = sector_stocks))
+}
+
+output <- get_stocks('constituents.csv',
+                     sectors = c("Industrials", "Information Technology", "Materials", "Utilities", "Consumer Discretionary", 
+                                 "Energy", "Financials", "Health Care","Consumer Staples"),
+                     max_number_of_stocks_per_sector = 10)
+
+stocks <- output$stocks
+sectors_stocks <- output$sector_stocks
+
+```
+
+In order to simplify the visual presentation, the `'DT' package` is used
+to create a table of all the stocks considered for each sector.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# code to create a datatable with the packages 'DT'
+options(repos = c(CRAN = "https://cloud.r-project.org"))
+
+library(DT)
+stocks_info <- data.frame(
+  Stock = character(),
+  Sector = character(),
+  stringsAsFactors = FALSE
+)
+
+for (sector in names(sectors_stocks)) {
+  stocks_info <- rbind(stocks_info, data.frame(
+    Stock = sectors_stocks[[sector]],
+    Sector = sector
+  ))
+}
+
+datatable(stocks_info)
+
+```
+
+We check the number of total stocks and how many records we have for
+each of them.
+
+```{r echo=FALSE}
+cat("Number of stocks:", ncol(stocks), "\n")
+cat("Number of records for each stock: ", nrow(stocks), "\n") 
+```
+
+As the rows correspond to days and we have accounted for 3 years, we
+should have approximately 1095 rows available. However, with only 1006
+data points for each stock, there are 89 missing days across all stocks.
+While one approach would be to use interpolation, the missing data only
+accounts for 0.08% of the total data, so we have decided to leave it as
+is.
+
+The following code calculates the *log ratio*, which is defined as:
+$$x_{t,j}=log(c_{t,j}/c_{t-1,j})$$ This formula calculates the ratio of
+the closing price of the current day to that of the previous day. The
+initial date log-ratio is not present in the first element of the time
+series, as it has no previous element. The time series begins on the
+second day of the market, accounting for the performance of the previous
+day.
+
+```{r}
+calculate_log_ratio <- function(stock){
+  
+  closing_prices = stock
+
+  log_ratio <- log(closing_prices[2:length(closing_prices)] / closing_prices[1:length(closing_prices)-1])
+  
+  return(log_ratio)
+}
+
+performance_table = cbind()
+for(stock_sym in colnames(stocks)){
+  perf  <- calculate_log_ratio(stocks[,stock_sym])
+  performance_table <- cbind(performance_table, perf)
+}
+```
+
+The performance table below shows only the **first five rows** of the
+*Industrial* stocks in order to simplify the visualization.
+
+```{r echo=FALSE}
+colnames(performance_table) <- colnames(stocks)
+datatable(head(performance_table[, 1:10], 10),options = list(
+  dom = 't',
+  scrollX = TRUE,
+  pageLength = 5,
+  lengthMenu = c(5, 10, 15)
+))
+```
+
+## Section 2.2 - Pearson-based correlation Heatmaps
+
+The aim of this study is to estimate the Pearson-based correlation graph
+for stocks using our performance table. The data matrix $X$ represents
+the performance of each stock over time, with each row representing a
+specific *time period* and each column representing a different *stock*.
+
+To estimate the correlation graph, each instance of stock performance
+$\{x_{t,j}\}_t$ is treated as an independent sample, despite not being
+truly independent.
+
+```{r}
+Pearson = cor(performance_table)
+```
+
+For better visualization, the **sub-Pearson heatmaps** for each sector
+can be observed below.
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+library(igraph)
+library(GGally)
+library(network)
+library(sna)
+library(ggplot2)
+library(intergraph)
+library(RColorBrewer)
+library(ggcorrplot)
+library(htmltools)
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#Generate static heatmaps 
+plot_cor_for_each_sector <- function(tot_stocks, num_stocks_for_each_sector, save_path = "./heatmaps/") {
+  sector_range = seq(1, tot_stocks, by = num_stocks_for_each_sector)
+  sector_names = names(sectors_stocks)
+   
+  for (i in sector_range) {
+    sub_Pearson <- Pearson[i:(i + num_stocks_for_each_sector -   1), i:(i + num_stocks_for_each_sector -   1)]
+    sector_name = sector_names[(i -   1) / num_stocks_for_each_sector +   1]
+    
+    
+    # Create a ggplot correlation plot with stock labels
+    p <- ggcorrplot(data.frame(sub_Pearson),
+                    method = "square",
+                    title = paste("Correlation Heatmap for", sector_name, "sector"),
+                    hc.order = TRUE,
+                    color = c("darkred", "white", "darkblue")) + 
+                    theme(plot.title = element_text(hjust = 0.5))
+    
+    # Calculate the heatmap number based on the loop index
+    heatmap_number <- (i -   1) %/% num_stocks_for_each_sector +   1
+    
+    # Save the ggplot object to a file in the specified directory, using the heatmap number
+    ggsave(paste0(save_path, "heatmap_", heatmap_number, ".png"), p, width =   8, height =   6)
+  }
+}
+
+# Example usage
+plot_cor_for_each_sector(ncol(Pearson),   10)
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+library(htmltools)
+
+# Create a div with overflow-x:auto
+outer_div <- div(style = "overflow-x:auto;")
+
+# Create another div inside the outer div with white-space: nowrap
+inner_div <- div(style = "white-space: nowrap;")
+
+# Add images to the inner div with the correct path
+image_sources <- paste0("heatmaps/heatmap_",  1:9, ".png")
+for (src in image_sources) {
+  img_tag <- img(src = src, style = "display: inline-block;")
+  inner_div <- tagAppendChild(inner_div, img_tag)
+}
+
+# Append the inner div to the outer div
+outer_div <- tagAppendChild(outer_div, inner_div)
+
+# Render the outer div
+outer_div
+
+```
+
+From the correlation heatmaps, it is possible to observe that the
+sectors in which the stocks are **strongly correlated** are *Utilities*,
+*Energy* (except for CTRA stocks) and *Consumer Staples*. The other
+sectors appear to show a situation of medium or low correlation (e.g.
+*Health Care* section).
+
+We expect stocks from the same sector to tend to be clustered together,
+as they tend to interact more with each other. We used the parameter
+`order = hclust` for **hierarchical clustering** to highlight which
+stocks tend to cluster within the same sector, that from the heatmap can
+be identified as squares with darker colors compared with the rest. We
+will then verify in Section 2.3 whether these clusters actually form in
+our graph.
+
+## Section 2.3 - Stocks clustering!
+
+We applied Bonferroni's correction for multiplicity to the alpha
+parameter to calculate the confidence intervals.
+
+We have done this because if we do not control for multiplicity we can
+comment only on the presence or absence of a single edge, not on the
+co-occurrence of edges in the graph.
+
+```{r}
+
+alpha = 0.05
+m = length(Pearson) # m is the number of intervals we collect 
+
+# Bonferroni correction for Multiplicity problem
+bonf  <- 1 - alpha/m  
+
+# CI with 2-sided hypothesis testing for Pearson correlation coefficient
+CI_upper = matrix(NA, nrow = ncol(stocks), ncol = ncol(stocks))
+for (i in 1:ncol(stocks)){
+  for (j in 1:(i)){
+    x = as.numeric(performance_table[, i])
+    y = as.numeric(performance_table[, j])
+    est_Pearson = cor.test(x, y,
+                           alternative = "two.sided",
+                           method = "pearson",
+                           exact = NULL, conf.level = bonf, continuity = FALSE)
+    upper = est_Pearson$conf.int[2] # select the upper bound of the confidence interval
+    CI_upper[i,j] = upper
+    CI_upper[j,i] = upper # because the correlation matrix is symmetric
+  }
+}
+colnames(CI_upper) = colnames(stocks)
+rownames(CI_upper) = colnames(stocks)
+
+CI_lower = matrix(NA, nrow = ncol(stocks), ncol = ncol(stocks))
+for (i in 1:ncol(stocks)){
+  for (j in 1:(i)){
+    x = as.numeric(performance_table[,i])
+    y = as.numeric(performance_table[,j])
+    est_Pearson = cor.test(x, y,
+                           alternative = "two.sided",
+                           method = "pearson",
+                           exact = NULL, conf.level = bonf, continuity = FALSE)
+    
+    lower = est_Pearson$conf.int[1] #select the lower bound of the confidence interval
+    CI_lower[i,j] = lower
+    CI_lower[j,i] = lower #Because the Correlation matrix is symmetric
+  }
+}
+colnames(CI_lower) = colnames(stocks)
+rownames(CI_lower) = colnames(stocks)
+```
+
+Now we are going to create the graph with stock as each node. In
+particular we place an undirected edge between stock $j_1$ and stock
+$j_2$ only if their estimated Pearson correlation is, statistically
+speaking, large enough. More specifically, for any chosen threshold
+$\tau>0$, we place an edge between $j_1$ and $j_2$ if the following
+condition is satisfied:
+
+$$ C_n^{j_1,j_2}(\alpha)\cap[-\tau,\tau]=\emptyset$$
+
+### 2.3.1 How to choose the threshold $\tau$?
+
+In order to choose a more robust threshold $\tau$, we decide to use the
+**correlation quantile method**. When multiple correlations are being
+tested, there is an elevated risk of *Type I errors* (false positives).
+Using a quantile-based threshold can mitigate this risk by controlling
+the false positive rate and avoiding the exclusion of potentially
+valuable correlation levels.
+
+By **reducing the percentile**, we are lowering the threshold for what
+constitutes a **significant correlation**, allowing a greater number of
+pairs of variables to exceed this threshold and thus **increasing the
+number of edges** in the graph.
+
+We will try some *quantile levels* and compare them to decide the **best
+threshold** $\tau$ in our scenario.
+
+```{r}
+# 1st try for threshold with 0.10 percentile
+# 90% of correlation values will exceed this threshold
+correlation = as.vector(Pearson)
+tau_10 = quantile(correlation, 0.10)
+print(tau_10) 
+
+# 2nd try for threshold with 0.80 percentile
+# Only 20% of correlation values will exceed this threshold
+tau_80 = quantile(correlation,  0.80)
+print(tau_80) 
+
+# 3rd try for threshold with 0.90 percentile
+# Only 10% of correlation values will exceed this threshold, 
+tau_90 = quantile(correlation,  0.90)
+print(tau_90) 
+
+# 4th try for threshold with 0.95 percentile
+# Only 5% of correlation values will exceed this threshold, 
+tau_95 = quantile(correlation,  0.95)
+print(tau_95) 
+
+# 5th try for threshold with 0.98 percentile
+# Only 2% of correlation values will exceed this threshold, 
+tau_98 = quantile(correlation,  0.98)
+print(tau_98)  
+
+```
+
+We can say, though, that for low values of the quantile we will probably
+have almost all the nodes connected so a lot of edges. This will happen
+because a very low quantile will figure as almost no threshold, it will
+mean that we are considering almost all the *Pearson coefficient
+statistically speaking large enough*.
+
+### 2.3.2 Graph Visualization
+
+```{r message=FALSE, warning=FALSE}
+
+# Check the condition for each tau
+num_values <- 5
+percentile_values <- c(0.10, 0.80, 0.90, 0.95, 0.98)
+tau_values <- c(tau_10, tau_80, tau_90, tau_95, tau_98)
+
+# Create a named vector for colors
+palette <- brewer.pal(length(names(sectors_stocks)), "Set3")
+sector_colors <- setNames(palette, names(sectors_stocks))
+
+for (i in seq(tau_values)){
+  tau_selected <- tau_values[i]
+  percentile_selected <- percentile_values[i]
+  
+  # Create an empty graph in which each node represents a stock 
+  pearson_net <- graph.empty(n = ncol(stocks), directed = FALSE)
+  V(pearson_net)$name <- colnames(stocks)
+  node_names <- V(pearson_net)$name
+  
+  # Associate each stock with its sector
+  for (sector in names(sectors_stocks)) {
+    stocks_in_sector <- sectors_stocks[[sector]]
+    for (stock in stocks_in_sector) {
+      node_index <- which(V(pearson_net)$name == stock)
+      V(pearson_net)$category[node_index] <- sector
+    }
+  }
+  
+  # Check the condition
+  for (i in 1:ncol(stocks)) {
+    for (j in 1:i) {
+      if (i!=j) { #to avoid self-loops
+        # Condition for C1 < C2 < - tau or tau < C1 < C2
+        if ((CI_lower[i, j] < (-tau_selected) && CI_upper[i, j] < (-tau_selected)) || 
+            (tau_selected < CI_lower[i, j] &&  tau_selected < CI_upper[i, j])) {
+          pearson_net <- add_edges(pearson_net, c(i, j))
+        }
+      }
+    }
+  }
+  
+  # Generate the plot
+  plot_object <- ggnet2(pearson_net,
+                        label.size = 2,
+                        size = 6.5,
+                        color = "category",
+                        edge.size = 0.65,
+                        edge.color = "gray",
+                        label = colnames(Pearson)) +
+    labs(title = paste("Pearson-based Correlation Graph \n(tau = ", round(tau_selected,3), "and percentile =", percentile_selected, ")")) +
+    theme(plot.title = element_text(hjust = 0.5),
+          plot.margin = margin(2, 2, 2, 0, "mm"),
+          legend.title = element_text(size = 10, face = "bold"),
+          legend.text = element_text(size = 12)
+    ) +
+    guides(color = guide_legend(title = "Sectors")) +
+    scale_color_manual(values = sector_colors)
+  
+  # Visualization
+  print(plot_object)
+  cat("Number of edges in the graph for tau =", round(tau_selected,3), ":", gsize(pearson_net), "\n")
+}
+
+```
+
+From these plots, we can observe how the value of $\tau$ influences the
+clusters that are formed in our *pearson_net* graph. **Low** $\tau$
+values lead to the formation of **larger and less specific clusters**.
+Conversely, **high** $\tau$ values lead to the formation of **smaller
+but more specific clusters**. However, a $\tau$ value that is too large
+can lead to the creation of *overly specific clusters* that result in
+the loss of some important relationships between various sectors.
+Consequently, the optimal value of $\tau$ represents a **trade-off**
+between clusters that are sufficiently large yet specific enough. In our
+specific case, the optimal tau values are those found **between** e **90th and
+95th percentiles**.
+
+Let us analyse the graph in detail with the percentile at 0.95 and
+$\tau=0.66$. As previously observed in the heatmaps, the stocks in the
+*Utilities* and *Energy* sectors are highly correlated and form distinct
+clusters. Additionally, as noted in the heatmap, CTRA is the only stock
+in the *Energy* sector that does not belong to the cluster due to its
+low correlation.
+
+The graph shows a cluster consisting of the *Financials*, *Information
+Technology*, *Materials*, and *Industrial* sectors. As there are three
+to four stocks for each of the first three sectors in the cluster, it
+can be assumed that there is a **correlation between them**.
+
+Examining the graph for the 0.90 percentile, we observe a similar
+situation to that of the 0.95 percentile for the *Utilities* and
+*Energy* sectors. Additionally, we can see an increase in the number of
+stocks participating in the cluster formed by the *Financials*,
+*Information Technology*, *Materials*, and *Industrial* sectors.
+
+Clusters consisting of only two stocks can be considered specific cases
+or *outliers*.
+
+## Section 2.4 - Shapley values for stocks
+
+In our Markowitz model, we have a **risk-averse client**. This suggests
+that our client would prefer to avoid both *excessively negative and
+excessively positive marginal contributions* from individual stocks, as
+these extreme situations have too large effects on the entire portfolio.
+
+In the case of excessively **negative Shapley values**, the client will
+experience a **loss**, and in our situation, what we want is for the
+client to never incur a loss compared to what they have invested.
+Conversely, in the case of **excessively positive Shapley values**,
+there will be a **greater dependence** between the portfolio and these
+individual stocks, consequently also a **higher aversion to risk**.
+
+The goal is to create a portfolio that is **sufficiently diversified**
+to mitigate the specific risk of individual stocks while maintaining an
+acceptable level of expected return.
+
+### 2.4.1 How to choose weight(s) $w$?
+
+```{r echo=FALSE}
+# Function to compute Shapley values
+num_stocks <- ncol(performance_table)
+compute_shapley <- function(w) {
+  shapley_estimates <- numeric(num_stocks)
+  for(j in 1:num_stocks){
+    indices <- sample(1:nrow(performance_table), replace = TRUE)
+    resampled_matrix <- performance_table[indices,]
+    covariance_matrix <- cov(resampled_matrix) # compute the covariance matrix
+    shapley_jth <- mean(performance_table[,j]) - w * sum(as.numeric(covariance_matrix[,j]))
+    shapley_estimates[j] <- shapley_jth
+  }
+  return(shapley_estimates)
+}
+
+```
+
+We can see $w$ as the **risk aversion coefficient**, which quantifies
+the degree to which an individual dislikes risk. In a couple of
+articles, one written by Chetty Raj @chetty2006new and another one
+written by Hansen Lars Peter @hansen1983stochastic, is suggested that
+the coefficient of relative risk aversion **lies between 0 and 2**.
+Therefore, we have decided to experiment with this range of values for
+our hyperparameter $w$ and observe the outcomes for our Shapley value.
+
+```{r}
+# Range of w values to test
+w_values <- seq(0, 2, by = 0.1)
+shapley_values <- sapply(w_values, compute_shapley)
+
+# Visualization of the results
+par(mar = c(4, 4, 4, 4))
+plot(w_values, shapley_values[1,], type = "l", ylim = range(shapley_values), xlab = "w", ylab = "Shapley Estimate", 
+     main = paste("Shapley Estimate vs. Parameter w "))
+
+for (i in 2:num_stocks) {
+  lines(w_values, shapley_values[i,], col = i)
+}
+```
+
+After analyzing this plot, we decide to choose a **risk aversion
+coefficient close to zero** (specifically $w = 0.1$) due to our client's
+aversion to risk. In this way, we manage to minimize the correlation
+between stocks, as stocks with low correlation tend to move
+independently of each other, thereby **reducing overall portfolio
+risk**.
+
+```{r}
+w = 0.1 # risk aversion coefficient 
+```
+
+We can also observe that marginal contributions tend to be **negative
+overall**, which is probably due to the fact that we are considering the
+three years of the *Covid-Age*, a period *not particularly positive for
+the stock market*.
+
+### 2.4.1. Computing the CIs
+
+In this part of the exercise we need to calculate the confidence
+intervals for the various Shapley values $\psi_j$ for each stock $j$.
+Normally we would by start with a **simple resampling with replacement**
+of our data points. That is not how we wanted to solve this task.
+
+Here is our first consideration. Since we are provided approximately
+$1000$ observations, why do we need to bother with a resampling
+technique? More than a thousand observations seem plenty enough for
+point estimation. Sure, we also need to calculate the asymptotically
+normal confidence intervals, and that's where bootstrap can come in
+handy. But here is our assumption:
+
+Since we have so many samples, we assume that even **reducing the number
+of observations** we can still get a well-behaved confidence interval,
+capable of providing a range for the Shapley estimate at a certain
+confidence level $\alpha$. Enough talking, let's see the code:
+
+```{r exercise_2_4_setup}
+B <- 1000   # The number of Bootstrap replicates
+interesting_stocks <- colnames(performance_table) # This is just in case we want to study a subset of the stocks, call them interesting :)
+
+performance_table_reduced = performance_table[seq(1, length(index(performance_table)), length.out = 50), interesting_stocks] # As stated before, reduce the number of samples - one every few weeks maybe!
+num_stocks <- ncol(performance_table_reduced)       # As many as we want to study!
+num_rows <- length(index(performance_table_reduced))# The new number of stocks. 
+```
+
+Before the bootstrap part, calculate the **empirical** shapleys, from
+the reduced dataset:
+
+```{r exercise_2_4_shapley_estimates}
+shapleys_reduced <- rep(NA, num_stocks)
+covariance_reduced <- cov(performance_table_reduced)
+
+for(j in 1:num_stocks){
+  cov_sum_row <- sum(as.numeric(covariance_reduced[,interesting_stocks[j]]))
+  shapleys_reduced[j] <- mean(as.numeric(performance_table_reduced[,j])) + w * cov_sum_row
+}
+```
+
+For (hopefully) better clarity. The Shapley boot estimates, gotten from
+the resampling we are doing, are useful for calculating the **standard
+deviation of the point estimator**.
+
+**WARNING**: This might take a bit since the covariance matrix needs to
+be calculated for each bootstrap iteration.
+
+```{r exercise_2_4_bootstrap_estimates}
+shapley_boot_estimates <- matrix(NA, nrow = B, ncol = num_stocks)
+
+for(b in 1:B){
+  indices <- sample(1:num_rows, replace = TRUE)
+  resampled_matrix <- performance_table_reduced[indices,]
+  covariance_matrix <- cov(resampled_matrix) # The covariance needs to be calculated at each Bootstrap iteration.
+  
+  for(j in 1:num_stocks){
+    shapley_jth <- shapleys_reduced[j] - w * sum(as.numeric(covariance_matrix[,j]))
+    shapley_boot_estimates[b, j] <- shapley_jth
+  }
+}
+```
+
+After this, calculate the asymptotically normal confidence intervals for
+each $\psi_j$:
+
+```{r exercise_2_4_confidence_interval}
+
+lower_bounds <- c()
+upper_bounds <- c()
+alpha = 0.05        # The confidence level will be (1 - alpha)
+
+for(i in 1:num_stocks){
+  shapley_std_error = sd(shapley_boot_estimates[,i])# Standard error from the Shapley bootstrapped estimates
+  shapley <- shapleys_reduced[i]                    # Empirical Shapley from the dataset
+  z_alpha_2 <- qnorm(1 - alpha/2)                   # Quantile at level 1-alpha/2
+  
+  ci = c(lower_bound = (shapley - z_alpha_2 * shapley_std_error), upper_bound = (shapley + z_alpha_2 * shapley_std_error))
+  
+  lower_bounds <- c(lower_bounds, ci[1]) # For later visualization, save the
+  upper_bounds <- c(upper_bounds, ci[2]) # intervals in these two vectors.
+}
+```
+
+As we can see, the bootstrap estimation process is quite reliable! We
+decided to check the performance of the CIs against both the Shapley of
+the reduced dataset **and** the Shapley calcualted on the whole $1000+$
+observations dataset.
+
+```{r exercise_2_4_visualization, echo = FALSE, fig.width=15, fig.height=8}
+# Calculating the true shapley from the original performance table (the one that spans 3 years)
+
+shapley_values_complete = rep(NA, length(interesting_stocks))
+cov_matrix <- cov(performance_table)
+
+for(i in 1:length(interesting_stocks)){
+  shapley_values_complete[i] <- mean(performance_table[,i]) - w * sum(as.numeric(cov_matrix[,interesting_stocks[i]]))
+}
+
+# CI Plot
+limit <- 10
+row_names <- c("stock", "lower", "upper", "mean")
+confidence_intervals <- data.frame(
+  stock = interesting_stocks,
+  lower = as.numeric(lower_bounds),
+  upper = as.numeric(upper_bounds),
+  shapley_complete = shapley_values_complete,
+  shapley_reduced = shapleys_reduced
+)
+
+
+ggplot(confidence_intervals, aes(x = stock, y = shapley_complete * -1)) +
+  geom_errorbar(aes(ymin = lower, ymax = upper, color = "Interval"), width = 0.4, lwd = 1) +
+  geom_point(aes(color = "Shapley (complete dataset)"), size = 2) +
+  geom_point(aes(y = shapley_reduced, color = "Shapley (reduced dataset)"), size = 2, shape = 1) +
+  
+  scale_color_manual(values = c("Shapley (complete dataset)" = "purple",
+                                "Shapley (reduced dataset)" = "black",
+                                "Interval" = "grey")) +
+  
+  labs(title = "Bootstrapped Confidence Intervals",
+       x = "Stock", y = expression(psi[j] * " estimates")) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1, size = 13), legend.box.spacing = unit(0.5, "cm"),
+        legend.position = "top", legend.text = element_text(size = 13)) +
+  guides(color = guide_legend(title = "Legend:"), shape = guide_legend(title = "Legend"))
+```
+
+As we can see the intervals we estimated are *quite* dependable. We cannot expect them to be perfect, otherwise they would surely be too large. On average though they seem to reliably capture the (still empirical) "true" Shapley.
+
+**P.S.**: One could ask, why two Shapleys in the plot? Isn't the true one enough? Of course it is enough!
+
+In this example we had these two kind of data and wanted to see how the Shapleys for the smaller dataset performed against the other. An even more interesting experiment would be to see how the Shapley changed by considering different time intervals entirely, maybe shorter, maybe even more in the past - of course that would require us to re-run the experiment from scratch.
+
+# Some brief final conclusions
+
+In conclusion, despite the *unpredictability* of market trends, to
+satisfy a hypothetical client in a *Markowitz model*, the approach would
+be to **diversify the portfolio** as much as possible, **minimizing the
+impact of strongly correlated stocks** that can have a decisive impact
+on it.
+
+\newpage
+
+## References

@@ -1,0 +1,211 @@
+---
+output: html_document
+---
+
+## Exercise 2:
+#### ***2.1 Estimation of the quantile***
+
+To pick an implementation of $\hat{f}_h(.)$ we first need to have a look into our distribution.
+
+We know that X has a Beta($\alpha$,$\beta$) distribution and we consider $F_X(.)$ as the true population model.
+
+```{r}
+# Set the seed
+set.seed(1234) 
+
+#Set up
+N_samples = 1000 
+
+# Pick two different (alpha, beta) pairs
+alpha_1 <- 1.5
+beta_1 <- 3.5
+
+# Generate random samples from a beta distribution - True scenario
+true_population = rbeta(N_samples, shape1 = alpha_1, shape2 = beta_1)
+```
+
+After picking $\alpha$ = 1.5 and $\beta$ = 3.5, we plot the PDF $f_X(.)$ of the true population and the histograms.
+
+```{r , echo=FALSE}
+# Plot a histogram of the generated data
+hist(true_population, breaks = 20,xlim=c(0,1), ylim = c(0,2.5),prob = TRUE, col = "lightgreen", main = "Histogram of Beta Distribution", xlab = "True population", ylab = "Density")
+# Probability density function (PDF) on the histogram
+curve(dbeta(x, shape1 = alpha_1, shape2 = beta_1), add = TRUE, col = "darkred", lwd = 2)
+```
+
+```{r, echo=FALSE}
+plot(ecdf(true_population), main = "Empirical CDF", xlab = "x", 
+     ylab = "eCDF(x)", lwd = 3, col = "darkorange")
+
+```
+
+Now we consider $F_Y(.)$ as an approximation to $F_X(.)$ and the Kernel Density Estimator (KDE) $\hat{f}_h(.)$ for which we need to choose a bandwith h \> 0.
+
+```{r}
+# Approximate scenario 
+alpha_2 <- 2 
+beta_2 <- 4.5
+
+approx_population = rbeta(N_samples, shape1 = alpha_2, shape2 = beta_2)
+
+```
+
+After setting h = 0.3 we implement the Epanechnikov Kernel Density Estimator with the `density()` function, and we plot it:
+
+```{r}
+# Set the bandwidth for the kernel density estimator
+h = 0.3 # h has to be more than zero
+
+KDE = density(approx_population, bw = h, kernel = "epanechnikov")
+plot(KDE, main = "Kernel Density Estimator [Epanechnikov]", lwd = 2.5, col = "darkred")
+
+```
+
+Now we compute the approximated PDF and CDF:
+
+```{r}
+ approx_pdf <- approxfun(KDE$x, KDE$y, method = 'linear', yleft = 0, yright = 0)
+ 
+ approx_cdf <- function(x, approx_pdf) {
+  integrate(approx_pdf, -Inf, x)$value
+}
+```
+
+And the estimation $\hat{F^{-1}}_h(.)$ of the quantile using the Epanechnikov-Kernel:
+
+```{r}
+compute_approx_quantile_epan_kernel <- function(x, h, z){
+  KDE = density(x, bw = h, kernel = "epanechnikov")
+  
+  # Compute the approximate CDF values for each x
+  x_values <- seq(min(KDE$x), max(KDE$x), length.out = length(KDE$x))
+  cdf_values <- sapply(x_values, function(x) approx_cdf(x, approx_pdf))
+  
+  # Linear interpolation is performed to obtain a function, not just a set of points
+  approx_pdf <- approxfun(KDE$x, KDE$y, method = 'linear', yleft = 0, yright = 0)
+  
+  # We are looking for the point where approx_cdf(x, approx_pdf) - z is zero, 
+  # and this point is approximately our desired quantile
+  approx_quantile <- uniroot(function(x) approx_cdf(x, approx_pdf) - z, c(min(KDE$x), max(KDE$x)))$root
+  return(list(x_values = x_values, cdf_values = cdf_values, approx_quantile = approx_quantile))
+}
+
+```
+
+#### ***2.2 Compute the Wasserstein-Distance***
+
+Compute Wasserstein-Distance, looking for the largest bandwidth h such that: $$W_{L_{1},1}(f,\hat{f_h})=\left(\int_{0}^{1} |F^{-1}(z)-\hat{F^{-1}_h}(z) \,| dz\right) \le \epsilon $$ Let's compute the first element, $F^{-1}(z)$
+
+```{r}
+compute_true_quantile <- function(z){
+  qbeta(z, alpha_1, beta_1)
+}
+```
+
+that we will use to compute the Wasserstein-Distance formula implemented by hand:
+
+```{r}
+wass_distance <- function(z, approx_quantile) {
+  return(integrate(function(z) abs(compute_true_quantile(z) - approx_quantile), 0, 1)$value)
+}
+```
+
+Now let's search, through a series of plots, for the largest bandwidth h in a range of values that we set from 0.05 to 1.5. These plots show both the cdf with the true and estimated quantile and also the correspondent h and Wasserstein-Distance value on the top of the graph:
+
+```{r, echo=FALSE}
+h = seq(0.05, 1.5, by = 0.2) 
+#if you want to see more plots you can decrease the "by" parameter and put it to 0.1
+
+# Create a function to plot the distance between approx_quantile and true_quantile
+plot_distance <- function(x_values, cdf_values, true_quantile, approx_quantile, h_value, wass_distance_value){
+
+  plot(x_values, cdf_values, type = "l", 
+       main = paste("Plot of the Wasserstein-Distance between quantiles (h =", h_value, ")\n Wasserstein-Distance =", round(wass_distance_value, 4)),
+       xlab = "x", ylab = "CDF(x)", lwd = 2, col = "darkorange")
+  
+  abline(v = true_quantile, col = "red", lty = 2, lwd = 2)  
+  abline(v = approx_quantile, col = "blue", lty = 2, lwd = 2)
+  legend("topright", legend = c("True Quantile", "Approx. Quantile"), col = c("red", "blue"), lty = 2, lwd = 2)
+}
+
+```
+
+
+```{r}
+compute_largest_bandwidth_h <- function(z, epsilon){
+  max_h <- NULL  
+  x_values <- seq(min(approx_population), max(approx_population), length.out = 100)
+  
+  for (h_i in h){
+    result <- compute_approx_quantile_epan_kernel(approx_population, h_i, z)
+    x_values <- result$x_values
+    cdf_values <- result$cdf_values
+    approx_quantile <- result$approx_quantile
+    wass_distance_value <- wass_distance(z, approx_quantile)
+
+    # Visualization
+    print(paste("h_i:", h_i, "approx_quantile:", round(approx_quantile,4), 
+                "true_quantile:", round(compute_true_quantile(z), 4)))
+    print(paste("Wasserstein-Distance:", round(wass_distance_value, 4)))
+    
+    plot_distance(x_values, cdf_values, compute_true_quantile(z), approx_quantile, h_i, wass_distance_value)
+    
+    if (wass_distance_value <= epsilon) {
+        max_h <- h_i
+    } 
+    else{
+      break
+    }
+  }
+    return(max_h)
+}
+```
+
+
+We will now conduct some tests varying both $\epsilon$ and the bandwidth h to see how they influence each other and the Wasserstain-Distance.
+
+In this approach, only the graphs that meet the condition **distance value $\le\epsilon$** are printed.
+
+**Test for $\epsilon$ = 0.15**
+```{r, echo=FALSE}
+
+epsilon <- 0.15 # epsilon > 0
+z = 0.5
+result <- compute_largest_bandwidth_h(z, epsilon)
+cat("Largest bandwidth h:", result)
+```
+
+
+
+**Test for $\epsilon$ = 0.2**
+```{r, echo=FALSE}
+epsilon <- 0.2 #epsilon > 0
+z = 0.6
+result <- compute_largest_bandwidth_h(z, epsilon)
+cat("Largest bandwidth h:", result)
+
+```
+
+
+**Test for $\epsilon$ = 0.5**
+```{r, echo=FALSE}
+epsilon <- 0.5 #epsilon > 0
+z = 0.6
+result <- compute_largest_bandwidth_h(z, epsilon)
+cat("Largest bandwidth h:", result)
+```
+
+We know that a small bandwidth h leads to undersmoothing and a large bandwidth leads to oversmoothing, and we also know that the smaller the $\epsilon$ the more accurate the distance, but it may take more time computationally.
+
+From the 3 sets of simulations we made (for $\epsilon$ = 0.15, $\epsilon$ = 0.2, and $\epsilon$ = 0.5) we can see that the more we increase $\epsilon$ the more the distance and the bandwidth h increase. This means that the distance measure will become less sensitive to small differences in the distribution, effectively ignoring small fluctuations.
+Also, we can observe that for values of $\epsilon$ \< 0.2, the distance is actually \> $\epsilon$ so that cases are not valid. Then we can assert that this distance actually has a lower bound.
+
+
+If we are looking for the largest bandwidth h such that $$W_{L_{1},1}(f,\hat{f_h})=\left(\int_{0}^{1} |F^{-1}(z)-\hat{F^{-1}_h}(z) \,| dz\right) \le \epsilon $$ from the simulation we made, we can conclude that to achieve this result we have to decrease the bandwidth. 
+
+Decreasing h and consequentially getting a smaller $\epsilon$, also leads to a smaller distance. This means that the two quantiles we are comparing, the one from the true population and the approximate one, are almost the same.
+
+#### **References:**
+
+https://aakinshin.net/posts/kde-bw/
+https://en.wikipedia.org/wiki/Kernel_density_estimation
