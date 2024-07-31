@@ -1,0 +1,955 @@
+---
+title: "<center> Bayesian Analysis for Bike Sharing Prediction"
+subtitle: "<center> Statistical Methods in Data Science and Laboratory II: Final Project"
+author: "Aur Marina Iuliana, 1809715"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    number_sections: false
+    theme: paper
+    highlight: tango
+    code_folding: show
+    toc_float: true  
+  pdf_document:
+    toc: true
+    toc_depth: '3'
+bibliography: citations.bib
+link-citations: true
+csl: nature.csl
+editor_options:
+  markdown:
+    wrap: 72
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, echo=FALSE}
+rm(list=ls())
+```
+
+```{r, echo=FALSE, include=FALSE, warning=FALSE}
+# Import Libraries
+
+#install.packages("R2jags")
+#install.packages("rjags")
+library(readr)
+library(aod)
+library(plotly)
+library(heatmaply)
+library(ggmcmc)
+library(MASS)
+library(ggplot2)
+library(dplyr)
+library(plotly)
+library(highcharter)
+library(lmtest)
+library(countrycode)
+library(paletteer)
+library(dplyr)
+library(kableExtra)
+library(gridExtra)
+library(ggcorrplot)
+library(mcmcplots)
+library(coda)
+library(R2jags)
+library(readxl)
+library(ggplot2)
+library(lattice)
+library(corrplot)
+library(stats)
+library(rstanarm)
+library(BAS)
+library(scales)
+library(rstan)
+library(bayesplot)
+library(car)
+library(tidyverse)
+library(RColorBrewer)
+library(reshape2)
+library(ggmosaic)
+library(knitr)
+library(kableExtra)
+```
+
+# Set Up
+
+Bike sharing systems are of great interest today due to their important role in traffic, environmental and health issues. The dataset for this project, provided by [Kaggle](https://www.kaggle.com/datasets/imakash3011/rental-bike-sharing?select=hour.csv), focuses on analyzing **bike sharing trends** from 2011 to 2012.
+
+The data includes information on time, weather conditions, and user type. The aim of this work is to identify the factors that influence the adoption, usage, and trends of bike sharing. This can guide **strategies** for optimizing bike sharing services, focusing marketing efforts, and enhancing the user experience.
+
+The dataset is composed by **16 variables** and **731 observations (days)** with the following schema:
+
+```{r, echo=FALSE, include=TRUE, warning=FALSE}
+
+# Load the dataset
+bike_data <- read.csv("day.csv", header = T)
+
+# Visualize the dataset schema
+glimpse(bike_data)
+```
+
+Let us examine the dataser for any **duplicates** and **missing values**.
+
+```{r, echo=FALSE, include=TRUE, warning=FALSE}
+
+# Check for duplicates
+duplicated_rows <- bike_data[duplicated(bike_data), ]
+num_duplicates <- sum(duplicated(bike_data))
+cat("Number of duplicates in the dataset: ", num_duplicates, "\n")
+
+# Check for missing values
+missing_values <- colSums(is.na(bike_data))
+cat("Number of missing values for each column: \n\n")
+print(missing_values)
+
+```
+
+Here is a brief description of each column in the dataset:
+
+-   `instant`: record index, serving as a unique identifier for each row in the dataset.
+
+-   `dteday` : date of the bike rental in YYYY-MM-DD format.
+
+-   `season`: season of the year represented as an integer (1 for winter, 2 for spring, 3 for summer, 4 for fall).
+
+-   `yr`: year in which the data was recorded (0 for 2011, 1 for 2012).
+
+-   `mnth`: month of the year, indicated as an integer from 1 to 12.
+
+-   `holiday`: indicates whether the day is a holiday or not, based on the public holiday calendar.
+
+-   `weekday`: day of the week, represented as an integer from 0 to 6.
+
+-   `workingday`: indicates whether the day is a working day (1) or not (0).
+
+-   `weathersit`, weather situation for the day, represented as an integer:
+
+    -   1: Clear, Few clouds, Partly cloudy.
+    -   2: Mist + Cloudy, Mist + Broken clouds, Mist + Few clouds, Mist.
+    -   3: Light Snow, Light Rain + Thunderstorm + Scattered clouds, Light Rain +               Scattered clouds.
+    -   4: Heavy Rain + Ice Pallets + Thunderstorm + Mist, Snow + Fog.
+
+-   `temp`: normalized temperature in Celsius, scaled between 0 and 1, with values divided by 41 (the maximum temperature).
+
+-   `atemp`: normalized feeling temperature (apparent temperature) of the day, scaled between 0 and 1, with values divided by 50 (the maximum apparent temperature).
+
+-   `hum`: normalized humidity of the day, scaled between 0 and 1, with values divided by 100 (the maximum humidity).
+
+-   `windspeed`: normalized wind speed of the day, scaled between 0 and 1, with values divided by 67 (the maximum wind speed).
+
+-   `casual`: number of casual users who rented bikes on the specific day.
+
+-   `registered`: number of registered users who rented bikes on the specific day.
+
+-   `cnt`: total count of bikes rented, which is the sum of casual and registered users for the specific day.
+
+# Exploratory Data Analysis (EDA)
+
+In common belief, the bike-sharing system is significantly influenced by **environmental** and **seasonal factors**, which can affect rental behavior. However, for a robust final prediction model, it is crucial to understand and quantify the impact of these factors.
+
+Specifically, we need to analyze how variables (e.g., temperature, humidity, holidays, or workdays) relate to each other and **correlate with rental trends**.
+
+## Qualitative Variables Analysis
+
+```{r, echo=FALSE, include=TRUE, warning=FALSE}
+bike_data$dteday <- ymd(bike_data$dteday)
+
+p1 <- ggplot(bike_data, aes(x = dteday, y = cnt)) +
+  geom_line(color = '#483d8b') +
+  labs(title = 'Bike Sharing Over Time',
+       x = 'Date',
+       y = 'Count of Rentals') 
+
+p2 <- ggplot(bike_data) +
+  geom_line(aes(x = dteday, y = registered, color = 'Registered'), size = 1) +
+  geom_line(aes(x = dteday, y = casual, color = 'Casual'), size = 1) +
+  labs(title = 'Bike Sharing Over Time considering User Type',
+       x = 'Date',
+       y = 'Count of Rentals',
+       color = 'User Type') +
+  scale_color_manual(values = c('Casual' = '#dda0dd', 'Registered' = '#4169e1')) +
+  theme_minimal()
+
+grid.arrange(p1, p2, nrow = 2)
+```
+
+This plot displays the total count of bikes rented over time from the beginning of 2011 to the end of 2012.
+The data reveals a **clear seasonal trend**: bike rentals generally increase during the warmer months and decrease during the colder months, indicating higher bike usage during favorable weather conditions.
+
+Additionally, the data from 2012 has **higher peaks** compared to 2011, indicating a possible increase in the popularity or availability of bike-sharing system. Both user types exhibit a similar trend to the top graph.
+
+Let's now analyze these insights more in detail.
+
+```{r, echo=FALSE, include=TRUE, warning=FALSE}
+# Compute Weather Situation Statistics
+bike_data_weathersit <- bike_data %>%
+  group_by(weathersit) %>%
+  summarise(total_rentals = sum(cnt, na.rm = TRUE)) %>%
+  mutate(percentage = (total_rentals / sum(total_rentals)) * 100)
+
+# Display Statistics Table
+bike_data_weathersit %>%
+  kable(caption = "Bike Rentals Count by Weather Situation",
+        col.names = c("Weather Situation", "Total Bike Rentals", "Percentage (%)"),
+        format = "html",
+        digits = 2) %>%
+  kable_styling(full_width = F, position = "left")
+```
+The data highlights that bike rentals are **heavily influenced by weather conditions**: as the weather conditions become less ideal, such as with mist or precipitation, the number of rentals decreases substantially. 
+
+
+```{r, echo=FALSE, include=TRUE, warning=FALSE}
+# Compute Months Statistics
+bike_data_months <- bike_data %>%
+  group_by(mnth) %>%
+  summarise(total_rentals = sum(cnt, na.rm = TRUE)) %>%
+  mutate(percentage = (total_rentals / sum(total_rentals)) * 100)
+
+# Display Statistics Table
+bike_data_months %>%
+  kable(caption = "Bike Rentals Count by Months",
+        col.names = c("Months", "Total Bike Rentals", "Percentage (%)"),
+        format = "html",
+        digits = 2) %>%
+  kable_styling(full_width = F, position = "left")
+```
+
+```{r, echo=FALSE, include=TRUE, warning=FALSE}
+# Compute Seasons Percentage
+bike_data_seasons <- bike_data %>%
+  group_by(season) %>%
+  summarise(total_rentals = sum(cnt, na.rm = TRUE)) %>%
+  mutate(percentage = (total_rentals / sum(total_rentals)) * 100)
+
+# Display Statistics Table
+bike_data_seasons %>%
+  kable(caption = "Bike Rentals Count by Seasons",
+        col.names = c("Seasons", "Total Bike Rentals", "Percentage (%)"),
+        format = "html",
+        digits = 2) %>%
+  kable_styling(full_width = F, position = "left")
+```
+
+
+The data highlights that **summer** (season 3) is the most favored season for bike rentals, with **August** (month 8) showing the highest number of rentals. Conversely, rentals are lower during the **winter** (season 1), with **January** (month 1) recording the fewest rentals. This aligns with the seasonal pattern previously observed.
+
+
+```{r, echo=FALSE, include=TRUE, warning=FALSE}
+p1 <- bike_data %>%
+  group_by(weekday) %>%
+  summarise(casual = sum(casual), registered = sum(registered)) %>%
+  gather(key = "user_type", value = "count", casual, registered) %>%
+  ggplot(aes(x = as.factor(weekday), y = count, fill = user_type)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  scale_y_continuous(labels = comma) +
+  scale_fill_manual(values = c("casual" = "#dda0dd", "registered" = "#4169e1")) +
+  labs(title = "Casual versus Registered Rentals by Weekday",
+       x = "Weekday",
+       y = "Count of Rentals",
+       fill = "User Type") +
+  theme_minimal()
+
+p2 <- bike_data %>%
+  group_by(holiday) %>%
+  summarise(casual = sum(casual), registered = sum(registered)) %>%
+  gather(key = "user_type", value = "count", casual, registered) %>%
+  ggplot(aes(x = as.factor(holiday), y = count, fill = user_type)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  scale_y_continuous(labels = comma) +
+  scale_fill_manual(values = c("casual" = "#dda0dd", "registered" = "#4169e1"))+
+  labs(title = "Casual versus Registered Rentals by Holiday",
+       x = "Holiday",
+       y = "Count of Rentals",
+       fill = "User Type") +
+  theme_minimal()
+
+
+p3 <- bike_data %>%
+  group_by(workingday) %>%
+  summarise(casual = sum(casual), registered = sum(registered)) %>%
+  gather(key = "user_type", value = "count", casual, registered) %>%
+  ggplot(aes(x = as.factor(workingday), y = count, fill = user_type)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  scale_y_continuous(labels = comma) +
+  scale_fill_manual(values = c("casual" = "#dda0dd", "registered" = "#4169e1")) +
+  labs(title = "Casual versus Registered Rentals by Working Day",
+       x = "Working Day",
+       y = "Count of Rentals",
+       fill = "User Type") +
+  theme_minimal()
+
+
+grid.arrange(p1, p2, p3, nrow = 3)
+```
+
+The rental counts for casual users tend to be higher towards the **end of the week**, with the highest values typically occurring around Saturday (weekday 6) and Sunday (weekday 0).
+
+In contrast, the rental counts for registered users are generally higher **during the week** in the working days (label 1), reflecting a **routine use**.  
+
+During holidays (labels 1), bike rentals **drop significantly** for both user types, likely because people stay home or use their cars instead.
+
+
+## Quantitative Variables Analysis
+
+```{r, echo=FALSE, include=TRUE, warning=FALSE}
+
+summary(bike_data[, c("temp", "atemp", "hum", "windspeed", "cnt", "casual", "registered")])
+
+```
+
+```{r, echo=FALSE, include=TRUE, warning=FALSE}
+total_bookings <- bike_data %>%
+  summarise(casual_users = sum(casual), registered_users = sum(registered))
+
+total_bookings_long <- gather(total_bookings, key = "user_type", value = "total", casual_users, registered_users)
+
+ggplot(total_bookings_long, aes(x = user_type, y = total, fill = user_type)) +
+  geom_bar(stat = "identity") +
+  geom_text(aes(label = scales::comma(total)), vjust = -0.5) +
+  xlab("User Type") +
+  ylab("Number of Bike Rentals") +
+  ggtitle("Number of Bike Rentals by User Type") +
+  scale_y_continuous(labels = comma) +
+  scale_fill_manual(values = c("casual_users" = "#dda0dd", "registered_users" = "#4169e1")) +
+  theme_minimal()
+```
+
+
+As noticed earlier, casual bike rentals are **much lower** than those of registered users, but they still impact the overall total count of bikes rentals. From this, we can assert that once registered, users tend to use bike rentals system **regularly**.
+
+
+
+```{r, echo=FALSE, include=TRUE, warning=FALSE}
+
+# Visualize the distribution of quantitative variables 
+p1 <- ggplot(bike_data, aes(x = temp)) + 
+  geom_density(fill = "#87cefa", color = "black") + 
+  ggtitle("Distribution of Temperature Values")
+
+p2 <- ggplot(bike_data, aes(x = atemp)) + 
+  geom_density(fill = "#f08080", color = "black") + 
+  ggtitle("Distribution of Feel.Temperature Values")
+
+p3 <- ggplot(bike_data, aes(x = hum)) + 
+  geom_density(fill = "#8fbc8f", color = "black") + 
+  ggtitle("Distribution of Humidity Values")
+
+p4 <- ggplot(bike_data, aes(x = windspeed)) + 
+  geom_density(fill = "#ffb6c1", color = "black") + 
+  ggtitle("Distribution of Windspeed Values")
+
+
+grid.arrange(p1, p2, p3, p4, ncol = 2)
+```
+
+The quantitative variables `temp`, `atemp`, `hum`, and `windspeed` are evenly distributed and normalized. This ensures they are on **comparable scales**, simplifying interpretation and modeling.
+
+
+# Outliers
+
+```{r, warning=FALSE, echo=FALSE}
+
+b1 <- ggplot(data = bike_data, aes(x = temp)) +
+  geom_boxplot(fill = "#87cefa") +
+  labs(title = "Temperature Box Plot", x = "Temperature") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+b2 <- ggplot(data = bike_data, aes(x = atemp)) +
+  geom_boxplot(fill = "#f08080") +
+  labs(title = "Feel.Temperature Box Plot", x="Feeling Temperature") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+b3 <- ggplot(data = bike_data, aes(x = hum)) +
+  geom_boxplot(fill = "#8fbc8f") +
+  labs(title = "Humidity Box Plot", x="Humidity") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+b4 <- ggplot(data = bike_data, aes(x = windspeed)) +
+  geom_boxplot(fill = "#ffb6c1") +
+  labs(title = "Windspeed Box Plot", x="Windspeed") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+b5 <- ggplot(data = bike_data, aes(x = casual)) +
+  geom_boxplot(fill = "#dda0dd") +
+  labs(title = "Casual Bike Rentals Box Plot", x="Casual") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+b6 <- ggplot(data = bike_data, aes(x = registered)) +
+  geom_boxplot(fill = "#4169e1") +
+  labs(title = "Registered Bike Rentals Box Plot", x="Registered") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+b7 <- ggplot(data = bike_data, aes(x = cnt)) +
+  geom_boxplot(fill = "#483d8b") +
+  labs(title = "Count Bike Rentals Box Plot", x="Count") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+  
+
+grid.arrange(b1, b2, b3, b4, b5, b6, b7, ncol = 2)
+
+```
+
+The outliers in the humidity (`hum`) and wind speed (`windspeed`) box plots reflect rare atmospheric conditions. They do not significantly impact the overall analysis and can represent **genuine seasonal variations**.
+
+The outliers in the casual bike rentals (`casual`) box plot indicate days when the number of casual bike rentals is significantly higher than the average. It is preferable to keep them in the dataset as they represent **genuine fluctuations in bike rentals** due to factors like favorable weather conditions, special events, or promotions.
+
+# Correlation Analysis
+
+```{r, echo=FALSE, include=TRUE, warning=FALSE}
+
+# Compute Correlation Matrix (without instant and dteday)
+corr_bike_data <- cor(bike_data[,-c(1,2)])
+  
+# Display Correlation Matrix
+hchart(round(corr_bike_data, digits = 2)) %>%
+  hc_plotOptions(
+             series = list(
+                borderColor = "black",
+                borderWidth = 1,
+                dataLabels = list(enabled = TRUE))) %>% 
+  hc_title(text = "Correlation Analysis between Variables")
+
+```
+
+Some positive correlations are quite evident:
+
+- A **high positive correlation** (0.99) between `temp` and `atemp` variables is expected as they both measure aspects of temperature.
+- A **high positive correlation** (0.95 and 0.67) between `cnt` and `registered/casual` variables reflects that total count of rentals is computed with both user types.
+- A **high positive correlation** (0.89) between `mnth` and `season` variables is expected because they provide similar information about the time of year.
+
+Other positive correlations are align with our previous observations:
+
+- A **positive correlation** (0.59) between `weathersit` and `hum` variables indicates that higher humidity levels are associated with more adverse weather conditions (such as precipitation and mist).
+- A **positive correlation** (0.63) between `cnt` with `temp`/`atemp` variables suggests that more rentals occur on warmer days/months.
+- A **negative correlation** (-0.23) between `windspeed` and `cnt` variables indicates that higher wind speed levels discourage bike rentals.
+- A **minimal negative effect** (-0.10) between`hum` and `cnt` variables means that humidity does not significantly influence bike rental trends.
+
+
+# Distribution Analysis 
+
+Now, let us analyze the `cnt` variable in relation to the other quantitative variables by using scatter plots to visualize the **linear relationships** between them.
+
+```{r, echo=FALSE, include=TRUE, warning=FALSE}
+# Create scatter plots to examine the relationships between variables
+
+s1 = ggplot(bike_data, aes(x = temp, y = cnt)) +
+  geom_point(color = "#87cefa", alpha = 0.5) +
+  geom_smooth(formula = y ~ x, method = "lm", se = FALSE, color = "blue") +
+  labs(x = "Temperature", y = "Count of Rentals", title = "Temperature vs Count of Rentals")+
+  theme(plot.title = element_text(hjust = 0.5))
+
+
+s2 = ggplot(bike_data, aes(x = temp, y = cnt)) +
+  geom_point(color = "#f08080", alpha = 0.5) +
+  geom_smooth(formula = y ~ x, method = "lm", se = FALSE, color = "red") +
+  labs(x = "Feeling Temperature", y = "Count of Rentals", title = "Feel.Temperature vs Count of Rentals")+
+  theme(plot.title = element_text(hjust = 0.5))
+
+s3 = ggplot(bike_data, aes(x = windspeed, y = cnt)) +
+  geom_point(color = "#ffb6c1", alpha = 0.5) +
+  geom_smooth(formula = y ~ x, method = "lm", se = FALSE, color = "#ff1493") +
+  labs(x = "Windspeed", y = "Count of Rentals", title = "Windspeed vs Count of Rentals")+
+  theme(plot.title = element_text(hjust = 0.5))
+
+s4 = ggplot(bike_data, aes(x = hum, y = cnt)) +
+  geom_point(color = "#8fbc8f", alpha = 0.5) +
+  geom_smooth(formula = y ~ x, method = "lm", se = FALSE, color = "darkgreen") +
+  labs(x = "Humidity", y = "Count of Rentals", title = "Humidity vs Count of Rentals")+
+  theme(plot.title = element_text(hjust = 0.5))
+
+s5 = ggplot(bike_data, aes(x = hum, y = cnt)) +
+  geom_point(color = "#8fbc8f", alpha = 0.5) +
+  geom_smooth(formula = y ~ x, method = "lm", se = FALSE, color = "darkgreen") +
+  labs(x = "Humidity", y = "Count of Rentals", title = "Humidity vs Count of Rentals")+
+  theme(plot.title = element_text(hjust = 0.5))
+
+
+grid.arrange(s1, s2, s3, s4, ncol = 2)
+```
+
+After observing the linear relationships, employing a **Linear Regression model** appears to be appropriate to predict bike rentals based on the environmental and seasonal settings.
+
+However, a Linear Regression model might not capture more complex relationships in the data. For comparison purpose, the **Negative Binomial model** can be a suitable option when dealing with count data. This model generalizes the Poisson model by introducing an additional parameter to account for **overdispersion**, a phenomenon commonly observed in real-world data.
+
+# Modelling 
+
+## Linear Regression
+
+Linear Regression is a statistical model widely used to estimate the linear relationship between a continuous variable of interest $y$ (the response or dependent variable) on the basis of one or more other variables (the predictor or independent variables) $X$.
+
+The model assumes a linear relationship, which can be represented mathematically as:
+
+$$
+y = \beta^{T}X + \varepsilon
+$$
+
+where:
+
+- $y$ is the vector of observed dependent variables.
+- $X$ represents the vector of predictors (independent variables or features).
+- $\beta$ indicate the coefficient vector (weights).
+- $\varepsilon \sim N(0, \sigma^2)$ represents the error term (or residual), representing the difference between the observed values and the values predicted by the model.
+
+
+## Negative Binomial
+
+Negative Binomial is a statistical model used to handle count data that exhibits overdispersion, which occurs when the variance of the data is significantly greater than the mean.
+
+We assume that the count data $Y_i$ follows a Negative Binomial distribution with parameter $p_i$, which represents the probability of "success" in a single trial of the Bernoulli distribution, and the dispersion parameter $size$:
+
+$$
+Y_i \mid p_i, size \sim \text{NegBin}(p_i, size)
+$$
+$$
+p_i = \frac{size}{size + \lambda_i}
+$$
+
+
+To relate the mean $\lambda_i$ to the predictors, we use a **log link function**. The link function connects the mean of the distribution to a linear predictor:
+
+$$
+\log(\lambda_i) = \mathbf{X}_i \boldsymbol{\beta}
+$$
+
+## Multicollinearity
+
+Including highly correlated variables in the model may lead to redundancy, which can cause **multicollinearity** @kim2019multicollinearity. This situation makes complicate to distinguish the individual effect of each variable on the response $y$ due to their overlapping information, making the model's estimates less reliable. 
+
+The correlation matrix already indicates potential multicollinearity issues. In the following steps, we will further investigate its presence in the data.
+
+
+# Frequentist Analysis
+
+The Frequentist analysis assumes that the model parameters (e.g., coefficients) are fixed but unknown constants. In our scenario, the goal is to provide comprehensive **statistical insights** into how various factors affect the count of bike rentals. This approach ensures that the model remains statistically valid. 
+
+## First Model: Linear Regression 
+
+We will define the model with all the variables and check for the presence of multicollinearity using the **Variance Inflation Factor (VIF)**. VIF measures the ratio of the variance of a parameter estimate in a full model (including all other parameters) to the variance of the parameter estimate if the model includes only that single parameter.
+
+```{r}
+# Define the model with all the variables
+model_lm_1 = lm(cnt ~ season + yr + mnth + holiday + weekday + workingday + weathersit
+          + temp + atemp + hum + windspeed + casual + registered, data = bike_data)
+```
+
+```{r, echo=FALSE, include=TRUE, warning=FALSE}
+# Use VIF to detect multicollinearity among predictors
+vif_values <- vif(model_lm_1)
+cat("Variance Inflation Factors (VIF): \n")
+print(vif_values)
+```
+
+We can observe that **some VIFs values are very high**, indicating the presence of multicollinearity. Consequently, for the modelling phase, we will use only the `temp` variable to represent temperature, the `cnt` variable to represent the number of bike rentals, while excluding the variables for feeling temperature (atemp) and user types (casual and registered).
+
+```{r}
+# Define the model without redundant variables
+model_lm_2 = lm(cnt ~ season + yr + mnth + holiday + weekday + workingday + weathersit
+          + temp + hum + windspeed, data = bike_data)
+
+```
+
+```{r, echo=FALSE, include=TRUE, warning=FALSE}
+# Use VIF to detect multicollinearity among predictors
+vif_values <- vif(model_lm_2)
+cat("Variance Inflation Factors (VIF) after removing redudant variables: \n")
+print(vif_values)
+```
+
+The model no longer exhibits signs of multicollinearity, as none of the VIF values exceed the threshold of 4. This indicates that the model coefficients are likely to be **stable** and **reliable**.
+
+To analyze the results of the Linear Regression analysis, including estimates for each of the beta coefficients, we will use the `summary()` function and generate several plots.
+
+```{r, echo=FALSE, include=TRUE, warning=FALSE}
+# Visualize a summary of the Linear Regression Model
+summary(model_lm_2)
+
+# Histogram of Residuals
+layout(matrix(c(1, 2), 1, 2, byrow = TRUE))
+
+hist(model_lm_2$residuals, 
+     main = "Histogram of Residuals",  
+     xlab = "Residuals", ylab = "Frequency", col = "sandybrown")  
+
+# Normal Q-Q Plot of Residuals
+qqnorm(model_lm_2$residuals, col = "salmon")  
+qqline(model_lm_2$residuals, col = "sandybrown") 
+
+# Compute AIC
+aic_lm_2 = AIC(model_lm_2)
+cat("Linear Regression Model AIC: ", aic_lm_2)
+```
+
+The model validates the observations from the exploratory data analysis, suggesting that this model effectively captures the factors influencing the number of bike rentals. Specifically, it identifies **temperature** (`temp`) as the most significant factor affecting positively the number of bike rentals ($\beta_{temp}$ = 5209.29) and **wind speed** (`windspeed`) as the primary factor reducing them ($\beta_{windspeed}$ = -2716.29).
+
+Working Day (`workingday`) p-value of 0.09919 indicates that it is **not statistically significant**, suggesting that the variable might not be necessary for the model. However, removing this variable led to a slight increase of residual standard error, indicating that it likely captures significant aspects in the model.
+
+Some considerations regarding the metrics:
+
+  - The **Residual Standard Error (RSE) at 874.9** reflects the average amount by which       the actual counts deviate from the predicted, indicating overall good performance of      the model.
+
+  - The **Multiple R-squared at 0.798** suggests that 79,8% of the variance in the             dependent variable is explained by the model, indicating a strong fit of the model        to the data.
+
+  - **Adjusted R-squared value at 0.796**, which closely approximates the R-squared          value, reflects that the model uses an appropriate number of predictors.
+
+  - The **F-statistic value at 285.9** and the p-value < 2.2e-16 indicate that the model      is statistically significant.
+
+Some considerations regarding the plots:
+
+  - The histogram of Residuals shows residuals centered around zero and distributed         symmetrically, suggesting that they are are **normally distributed**.
+
+  - The Normal Q-Q plot confirms this trend but highlights deviations at the extremes,      indicating the presence of some **outliers**.
+  
+
+## Second Model: Negative Binomial
+
+```{r}
+model_nb = glm.nb(cnt ~ season + yr + mnth + holiday + weekday + workingday + weathersit
+                  + temp + hum + windspeed, data = bike_data)
+```
+
+
+To analyze the results of the Negative Binomial analysis, including estimates for each of the beta coefficients, we will use the `summary()` function and generate several plots.
+
+
+```{r, echo=FALSE, include=TRUE, warning=FALSE}
+# Visualize a summary of the second model
+summary(model_nb)
+
+# Histogram of Residuals
+layout(matrix(c(1, 2), 1, 2, byrow = TRUE))
+
+hist(model_nb$residuals, 
+     main = "Histogram of Residuals",  
+     xlab = "Residuals", ylab = "Frequency", col = "midnightblue")  
+
+# Normal Q-Q Plot of Residuals
+qqnorm(model_nb$residuals, col = "#b0e0e6")  
+qqline(model_nb$residuals, col = "midnightblue") 
+```
+
+In the Negative Binomial model, the variables month (`mnth`) and working day (`workingday`) are classified as **not statistically significant** for the final prediction. However,  similar to the Linear Regression model, their removal led to a slight increase in the error, indicating that they likely capture significant aspects of the data.
+
+## Models Comparison
+
+```{r, echo=FALSE, include=TRUE, warning=FALSE}
+aic_nb <- AIC(model_nb)
+
+aic_values <- data.frame(
+  Model = c("Linear Regression Model", "Negative Binomial Model"),
+  AIC = c(aic_lm_2, aic_nb)
+)
+
+ggplot(aic_values, aes(x = Model, y = AIC, fill = Model)) +
+  geom_bar(stat = "identity") +
+  geom_text(aes(label = round(AIC, 2)), vjust = -0.5, color = "black") +
+  theme_minimal() +
+  labs(title = "Comparison of AIC Values",
+       y = "AIC",
+       x = "") +
+  scale_fill_manual(values = c("sandybrown", "midnightblue"))
+```
+
+Comparing the plots and the AIC metric, we observe that, despite overall showing a good fit to the data, this model appears to **perform slightly worse** (AIC = 12334) than the Linear Regression model (AIC = 11991.1).
+
+# Bayesian Analysis
+
+In contrast to Frequentist analysis, Bayesian analysis treats the model parameters as **random variables with associated probability distributions**. 
+
+This approach allows for the integration of prior knowledge or beliefs about the parameters in the model, which can be updated with new data to form a posterior distribution. The goal of this approach is to identify the **posterior distribution of parameters** (e.g., coefficients) based on the prior probability distribution and the observed data.
+
+Choosing the appropriate prior depends on how much prior information we have and how much influence we want the prior to have on our posterior distribution. 
+
+## First Model: Linear Regression
+
+```{r}
+# Set a seed for reproducibility
+set.seed(123)
+
+# Define the model for the Bayesian analysis
+lm_bayesian_model <- function(){
+  # Compute the Likelihood
+  for (i in 1:N){
+    y[i] ~ dnorm(mu[i], tau)
+    mu[i] <- alpha + beta_season * season[i] + 
+            beta_year * yr[i] + 
+            beta_holiday * holiday[i] + 
+            beta_weekday * weekday[i] + 
+            beta_workingday * workingday[i] + 
+            beta_weathersit * weathersit[i] + 
+            beta_temp * temp[i] + 
+            beta_hum * hum[i] + 
+            beta_windspeed * windspeed[i] 
+    }
+  
+  # Define the priors for the intercept alpha and the regression coefficients
+  alpha ~ dnorm(0, 1.0e-6) 
+  beta_season ~ dnorm(0, 1.0e-6)
+  beta_year ~ dnorm(0, 1.0e-6)
+  beta_holiday ~ dnorm(0, 1.0e-6)
+  beta_weekday ~ dnorm(0, 1.0e-6)
+  beta_workingday ~ dnorm(0, 1.0e-6)
+  beta_weathersit ~ dnorm(0, 1.0e-6)
+  beta_temp ~ dnorm(0, 1.0e-6)
+  beta_hum ~ dnorm(0, 1.0e-6)
+  beta_windspeed ~ dnorm(0, 1.0e-6)
+  
+  # Define sigma and the priors for the variable tau
+  tau ~ dgamma(0.01, 0.01)
+  sigma = 1/sqrt(tau)
+}
+```
+
+
+```{r}
+# Define Features
+y <- as.numeric(bike_data$cnt)
+season <- as.numeric(bike_data$season)
+yr <- as.numeric(bike_data$yr)
+holiday <- as.numeric(bike_data$holiday)
+weekday <- as.numeric(bike_data$weekday)
+workingday <- as.numeric(bike_data$workingday)
+weathersit <- as.numeric(bike_data$weathersit)
+temp <- as.numeric(bike_data$temp)
+hum <- as.numeric(bike_data$hum)
+windspeed <- as.numeric(bike_data$windspeed)
+
+# Set parameters to save
+model_params_lm <- c("beta_season", "beta_year", "beta_holiday", "beta_weekday",
+                "beta_workingday", "beta_weathersit", "beta_temp", "beta_hum",
+                "beta_windspeed")
+
+# Prepare the data for RJags
+data_jags_lm <- list("y" = y,
+                     "N" = nrow(bike_data),
+                     "season" = season,
+                     "yr" = yr,
+                     "holiday" = holiday,
+                     "weekday" = weekday,
+                     "workingday" = workingday,
+                     "weathersit" = weathersit,
+                     "temp" = temp,
+                     "hum" = hum,
+                     "windspeed" = windspeed
+                    )
+
+```
+
+
+```{r}
+# Fit the mode using RJags
+lm_model_jags <- jags(data = data_jags_lm, 
+                   parameters.to.save = model_params_lm, 
+                   model.file = lm_bayesian_model,
+                   n.chains = 3,
+                   n.iter = 10000, 
+                   n.burnin = 1000
+                  )
+
+lm_model_jags
+```
+
+
+## Second Model: Negative Binomial 
+
+```{r}
+# Set a seed for reproducibility
+set.seed(123)
+
+# Define the Negative Binomial model for the Bayesian analysis
+nb_bayesian_model <- function(){
+  # Compute the Likelihood
+  for (i in 1:N){
+    y[i] ~ dnegbin(p[i], size)
+    p[i] <- size / (size + lambda[i])
+    log(lambda[i]) <- alpha + beta_season * season[i] + 
+                 beta_year * yr[i] + 
+                 beta_holiday * holiday[i] + 
+                 beta_weekday * weekday[i] + 
+                 beta_workingday * workingday[i] + 
+                 beta_weathersit * weathersit[i] + 
+                 beta_temp * temp[i] + 
+                 beta_hum * hum[i] + 
+                 beta_windspeed * windspeed[i]
+                    
+  }
+
+  # Define the priors for the intercept alpha and the coefficients
+  alpha ~ dnorm(0, 1.0e-6)
+  beta_season ~ dnorm(0, 1.0e-6)
+  beta_year ~ dnorm(0, 1.0e-6)
+  beta_holiday ~ dnorm(0, 1.0e-6)
+  beta_weekday ~ dnorm(0, 1.0e-6)
+  beta_workingday ~ dnorm(0, 1.0e-6)
+  beta_weathersit ~ dnorm(0, 1.0e-6)
+  beta_temp ~ dnorm(0, 1.0e-6)
+  beta_hum ~ dnorm(0, 1.0e-6)
+  beta_windspeed ~ dnorm(0, 1.0e-6)
+  size ~ dunif(0.001, 1000)
+  }
+```
+
+```{r}
+# Set parameters to save
+model_params_nb <- c("beta_season", "beta_year", "beta_holiday", "beta_weekday",
+                "beta_workingday", "beta_weathersit", "beta_temp", "beta_hum",
+                "beta_windspeed")
+
+# Prepare the data for RJags
+data_jags_nb <- list("y" = y,
+                  "N" = nrow(bike_data),
+                  "season" = season,
+                  "yr" = yr,
+                  "holiday" = holiday,
+                  "weekday" = weekday,
+                  "workingday" = workingday,
+                  "weathersit" = weathersit,
+                  "temp" = temp,
+                  "hum" = hum,
+                  "windspeed" = windspeed
+                  )
+```
+
+
+```{r}
+# Fit the mode using RJags
+nb_model_jags <- jags(data = data_jags_nb, 
+                   parameters.to.save = model_params_nb, 
+                   model.file = nb_bayesian_model,
+                   n.chains = 3,
+                   n.iter = 10000, 
+                   n.burnin = 1000
+                  )
+
+nb_model_jags
+```
+
+## Bayesian Results 
+
+The results are consistent with those from the Frequentist analysis: in both models, **temperature** (`temp`) is identified as the most significant factor affecting positively the number of bike rentals, while **wind speed** (`windspeed`) is recognized as the primary factor reducing them.
+
+Considering the metrics:
+
+  - The $\hat{R}$, known as the **Gelman-Rubin diagnostic test**, assesses whether MCMC      chains have converged sufficiently to provide accurate estimates of the posterior         distribution. In both models, $\hat{R}$ values are very close to 1 (ranging from 1.001     to 1.003), suggesting that the MCMC chains have converged well.
+  
+  - The $n_{eff}$, or *effective sample size*, quantifies the quality of samples generated     by the MCMC process. In boht model, we obtain a high $n_{eff}$, which means that we       have a good amount of effective samples to estimate each parameter accurately.
+
+
+## Models Comparison
+
+The **Deviance Information Criterion (DIC)** is a criterion used for model selection in Bayesian Analysis. It aims to balance the **quality of fit** of the model with its **complexity**, helping to avoid overfitting.
+
+The DIC value can be computed with the following general formula:
+
+$$
+DIC = D(\overline{\theta}) + 2 \cdot p_D
+$$
+$\bar{D}$ is the **deviance** of the model, which measures of how well the model explains the observed data. It is defined as follows:
+
+$$ 
+D(\overline{\theta}) = - 2 \cdot \text{log-likelihood of the model}
+$$
+  
+$p_D$ is the **penalty term for model complexity** and is calculated as follows:
+
+$$
+p_D = \frac{1}{2} \cdot var[D(\theta)]
+$$
+
+Let's now compare the DIC values for the two models.
+
+```{r, echo=FALSE, include=TRUE, warning=FALSE}
+dic_values <- data.frame(
+  Model = c("Linear Regression Model", "Negative Binomial Model"),
+  DIC = c(lm_model_jags$BUGSoutput$DIC, nb_model_jags$BUGSoutput$DIC)
+)
+
+ggplot(dic_values, aes(x = Model, y = DIC, fill = Model)) +
+  geom_bar(stat = "identity") +
+  geom_text(aes(label = round(DIC, 2)), vjust = -0.5, color = "black") +
+  theme_minimal() +
+  labs(title = "Comparison of DIC Values",
+       y = "DIC",
+       x = "") +
+  scale_fill_manual(values = c("sandybrown", "midnightblue"))
+```
+
+Lower DIC values indicate a better model. Consequently, the **Linear Regression model** appears to be the **most suitable for our data** compared to the Negative Binomial model.
+
+Relying solely on the DIC value is not sufficient to assess the overall goodness of a model. Let’s proceed to analyze the **diagnostics of the Linear Regression model** to gain insights into the reliability of the estimates obtained.
+
+## Diagnostics
+
+### Autocorrelation Function
+
+In a Bayesian analysis, the **Autocorrelation Function (ACF)** measures how correlated the samples of a parameter are at different lags in an MCMC. High autocorrelation indicates that samples are not independent, suggesting potential issues with convergence.
+
+```{r, echo=FALSE, include=TRUE, warning=FALSE}
+# Compute ACF measures
+par(mfrow = c(3, 3))
+
+for (param in model_params_lm) {
+  acf(lm_model_jags$BUGSoutput$sims.array[,2,param], main = paste("ACF for", param), lwd = 2)
+}
+
+```
+
+The ACF plots indicate that there is **low autocorrelation** between the sampled values at different lags for any of the parameters. This suggests that these variables are independent of their past values.
+
+### Trace Plots
+
+A traceplot is a key tool in MCMC diagnostics used to assess whether the Markov chains have converged to their stationary distributions and are effectively exploring the parameter space.
+
+The desired result is that the chains within each traceplot show stability and good mixing. **Stability** indicates that the chains have converged to a stationary distribution. **Good mixing** chains will overlap considerably and should not stay in local modes for long.
+
+
+```{r, echo=FALSE, include=TRUE, warning=FALSE}
+# Compute Trace Plots
+mcmcplots::traplot(lm_model_jags, parms = model_params_lm)
+
+```
+
+
+Examining our results, we can assert that all the criteria outlined above have been fully satisfied.
+
+
+### Density Plots
+
+In MCMC diagnostics, density plots can be used to visualize the distribution of samples from the posterior distribution of parameters. A **well-defined peak** far from zero indicates that the parameter estimate is focused around that value with low uncertainty.
+
+```{r, echo=FALSE, include=TRUE, warning=FALSE}
+# Compute Density Plots
+mcmcplots::denplot(lm_model_jags, parms = model_params_lm)
+```
+
+All variables converge to a **normal distribution** with a well-defined peak: this supports the idea that parameter estimates are consistent and focused around true values.
+
+### Raftery & Lewis Test
+
+The Raftery and Lewis diagnostic test is a method used in Bayesian analysis to determine the **number of iterations** (burn-ins M) required in a MCMC simulation to ensure that the results are reliable and that the chain has converged. 
+
+```{r, echo=FALSE, include=TRUE, warning=FALSE}
+mcmc_mod <- as.mcmc(lm_bayesian_model)
+raftery.diag(mcmc_mod)
+```
+
+## Final Considerations
+
+After the analysis, it is evident how crucial it is to investigate the dataset before moving on to the modeling phase. Specifically, the key points of this project are that:
+
+  - Registered users show routine use of the service, making it important to                  encourage the **loyalty of casual users**.
+  
+  - Since the data show a **seasonal trend**, it could be beneficial to increase bike         availability and promote their use during the warmer months.
+  
+  - **Temperature** (`temp`) is identified as the most significant factor affecting           positively the number of bike rentals, while **wind speed** (`windspeed`) is              recognized as the primary factor reducing them.
+  
+  - Employing a model that is overly complex and incorporates redundant variables can         result in **multicollinearity issues**.  Therefore, it is important to perform feature     selection before proceeding to the modeling phase.
+
+  - Despite its simplicity, the **Linear Regression model** demonstrated an appropriate       fit for this task, achieving satisfactory performance. Linear Regression promotes a       linear relationship in statistical models, simplifying the interpretation of complex      relationships in the data. Additionally, it helps align the data with a normal            distribution, which is a crucial assumption in many statistical analyses.
+
+# References
+

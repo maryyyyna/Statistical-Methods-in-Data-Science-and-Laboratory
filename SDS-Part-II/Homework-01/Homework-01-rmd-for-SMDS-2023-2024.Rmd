@@ -1,0 +1,639 @@
+---
+title: Homework \#01
+author: SMDS-2023-2024
+date:  |
+  | \textsc{\textbf{\Large Statstical Methods in Data Science II a.y. 2022-2023}}
+  | M.Sc. in Data Science
+  | 
+  | Author: Aur Marina Iuliana, 1809715
+  | \underline{deadline: April 26th, 2024}
+output:
+  html_document:
+    keep_md: yes
+    theme: united
+  pdf_document:
+    keep_tex: yes
+    toc: no
+header-includes: 
+- \usepackage{transparent}
+- \usepackage[utf8]{inputenx}
+- \usepackage{iwona}
+- \usepackage{tikz}
+- \usepackage{dcolumn}
+- \usepackage{color}
+- \usepackage[italian]{babel}
+- \usepackage{listings}
+- \usepackage{hyperref}
+- \usepackage{setspace}
+- \usepackage{enumitem}
+- \usepackage{tocloft}
+- \usepackage{eso-pic}
+- \geometry{verbose,tmargin=5cm,bmargin=3.5cm,lmargin=2.5cm,rmargin=2.5cm}
+---
+
+```{r setup, include=FALSE}
+library(knitr)
+
+knitr::opts_chunk$set(echo = TRUE)
+
+# the default output hook
+hook_output = knit_hooks$get('output')
+knit_hooks$set(output = function(x, options) {
+  if (!is.null(n <- options$out.lines)) {
+    x = unlist(stringr::str_split(x, '\n'))
+    if (length(x) > n) {
+      # truncate the output
+      x = c(head(x, n), '....\n')
+    }
+    x = paste(x, collapse = '\n') # paste first n lines together
+  }
+  hook_output(x, options)
+})
+```
+
+```{r, include=FALSE, warning=FALSE}
+
+options(width=60)
+opts_chunk$set(out.lines = 23, comment = "", warning = FALSE, message = FALSE, echo = TRUE, tidy = TRUE, size="small",tidy.opts=list(width.cutoff=50), fig.align = 'center', fig.width = 5, fig.height = 4)
+```
+
+```{r,echo=FALSE}
+set.seed(123)
+load("Hmwk.RData")
+```
+
+<font color="#FF0000"></font>
+
+
+## A. Simulation
+
+### 1. Consider the following joint discrete distribution of a random vector $(Y,Z)$ taking values over the bi-variate space:
+
+\begin{eqnarray*}
+{\cal S} = {\cal Y} \times {\cal Z} &=& \{(1,1);(1,2);(1,3);\\
+&& (2,1);(2,2);(2,3);\\
+&& (3,1);(3,2);(3,3)\}
+\end{eqnarray*} The joint probability distribution is provided as a matrix $\texttt{J}$ whose generic entry $\texttt{J[y,z]}=Pr \{Y=y,Z=z\}$
+
+```{r}
+J
+S
+```
+
+You can load the matrix `S` of all the couples of the states in ${\cal S}$ and the matrix `J` containing the corresponding bivariate probability masses from the file "Hmwk.RData". How can you check that $J$ is a probability distribution?
+
+\bigskip
+
+We can verify that $J$ is a probability distribution by checking that it satisfies the following two conditions:
+
+1.  Each value in the matrix should be a non-negative value.
+
+```{r}
+check_first_condition <- function(matrix){
+  if (all(matrix > 0)) 
+  { print("First condition is satisfied: all values in the matrix are non-negative.") 
+} else{ 
+    print("First condition is not satisfied: some values in the matrix are negative.") }
+}
+```
+
+```{r}
+check_first_condition(J)
+```
+
+2.  The sum of all values in the matrix should equal 1.
+
+$$ 
+\sum_{y} \sum_{z} J[y, z] = \sum_{y} \sum_{z} Pr({Y = y, Z = z}) = 1
+$$
+
+We can check it manually:
+
+$$ Pr({Y = 1, Z = 1}) + Pr({Y = 1, Z = 2}) +Pr({Y = 1, Z = 3}) + \\ Pr({Y = 2, Z = 1}) + Pr({Y = 2, Z = 2}) + Pr({Y = 2, Z = 3}) + \\
+Pr({Y = 3, Z = 1}) + Pr({Y = 3, Z = 2}) + Pr({Y = 3, Z = 3}) = \\
+0.06 + 0.17 + 0.10 + 0.10 + 0.12 + 0.11 + 0.14 + 0.02 + 0.18 = 1
+$$
+
+Or using R:
+
+```{r}
+check_second_condition <- function(matrix){
+  if (round(sum(matrix), 3) == 1){
+    print("Second condition is satisfied: the sum of all values in the matrix is equal to 1.")
+    } else{
+      print("Second condition is not satisfied: the sum of all values in the matrix is not equal to 1.")
+    }
+  }
+```
+```{r}
+check_second_condition(J)
+```
+
+### 2. How many *conditional distributions* can be derived from the joint distribution `J`? Please list and derive them.
+
+\bigskip
+
+\textbf{Answer}
+
+From the joint distribution can be derived as many conditional distributions as there are rows and columns. In our case, in a $3x3$ matrix, we can identify in total **6 conditional distributions**:
+
+a)  Conditional distribution of $Y$ given $Z = z \in \{1, 2, 3\}$:
+
+$$
+P(Y|Z = z) = \frac{P(Y = y, Z = z)}{P(Z = z)}
+$$ 
+
+  where: 
+  
+  - $P(Y = y, Z = z)$ is the joint probability of $Y$ and $Z$; 
+  - $P(Z = z)$ is the marginal probability of $Z$.
+
+```{r}
+cols_to_consider = unique(S[, 1])
+for (z in cols_to_consider){
+  conditional_distribution_1 = J[z, ] / sum(J[z, ])
+  cat("Conditional distribution of P(Y|Z =", z,"):\n")
+  print(round(conditional_distribution_1, 3))
+  cat("\n")
+}
+```
+
+b)  Conditional distribution of $Z$ given $Y = y \in \{1, 2, 3\}$:
+
+$$
+P(Z| Y = y) = \frac{P(Y = y, Z = z)}{P(Y = y)}
+$$ 
+  
+  where: 
+  
+  - $P(Y = y, Z = z)$ is the joint probability of $Y$ and $Z$; 
+  
+  - $P(Y = y)$ is the marginal probability of $Y$.
+
+```{r}
+rows_to_consider <- unique(S[, 2])
+
+for (y in rows_to_consider){
+  conditional_distribution_2 <- J[ , y] / sum(J[ ,y])
+  cat("Conditional distribution of P(Z|Y =", y,"):\n")
+  print(round(conditional_distribution_2, 3))
+  cat("\n")
+}
+```
+
+\bigskip
+
+\bigskip
+
+### 3. Make sure they are probability distributions.
+
+First, let's check the conditions for $P(Y|Z = z)$ and $z \in \{1, 2, 3\}$:
+
+```{r}
+for (z in rows_to_consider){
+  conditional_distribution_1 = J[z ,] / sum(J[z ,])
+  cat("Conditional distribution of P(Y|Z =", z,"):\n")
+  check_first_condition(conditional_distribution_1)
+  check_second_condition(conditional_distribution_1)
+  cat("\n")
+}
+```
+
+Then, let's check the conditions for $P(Z| Y = y)$ and $y \in \{1, 2, 3\}$:
+
+```{r}
+for (y in cols_to_consider){
+  conditional_distribution_2 = J[, y] / sum(J[, y])
+  cat("Conditional distribution of P(Z|Y =", y,"):\n")
+  check_first_condition(conditional_distribution_2)
+  check_second_condition(conditional_distribution_2)
+  cat("\n")
+}
+```
+
+\bigskip
+
+### 4. Can you simulate from this `J` distribution? Please write down a working procedure with few lines of R code as an example. Can you conceive an alternative approach? In case write down an alternative working procedure with few lines of R
+
+\bigskip
+
+**a) First approach**: we can simulate from this $J$ distribution using the sampling function provided by R. Specifically, we can simulate from $J$ using the *support matrix $S$*, which represents all possible pairs of values for the random variables $Y$ and $Z$, following these steps: 
+
+```{r}
+set.seed(1234) # for reproducibility
+N <- 10000 # number of samples
+support <- rownames(S) 
+
+# Generate the random samples
+samples <- sample(support, N, replace = TRUE, prob = c(J))
+
+# Compute the the relative frequencies of the random samples 
+simulation <- prop.table(table(samples))
+
+# Create the simulated J matrix to compare the results 
+simulated_J <- matrix(simulation, nrow = nrow(J), ncol = ncol(J))
+rownames(simulated_J) <- rownames(J)
+colnames(simulated_J) <- colnames(J)
+```
+```{r, echo=FALSE}
+cat("J matrix:")
+print(J)
+cat("\n")
+
+cat("Simulated J matrix: ")
+print(simulated_J)
+```
+
+
+b) **Alternative approach**: we can also simulate from this $J$ distribution using the *marginal distributions* and *conditional distributions*. Specifically, we use the marginal distributions of $Z$ and the conditional distributions of $Y|Z=z \in \{1, 2, 3\}$ by following these steps:
+
+```{r}
+set.seed(1234) # for reproducibility
+N = 10000 # number of samples
+
+Z_support <- unique(S[, 1])
+Y_support <- unique(S[, 2])
+
+# Compute the conditional distributions Y|Z
+Z_marginal <- apply(J, 1, sum)
+Z_marginal_matrix <- matrix(Z_marginal, nrow = nrow(J), ncol = ncol(J))
+conditional_dist <- J/Z_marginal_matrix
+  
+# Generate random samples of Z based on its marginal distribution
+Z <- sample(Z_support, N, replace = TRUE, prob = Z_marginal)
+
+# Generate random samples of Y based on the conditional distributions
+Y <- rep(NA, N)
+for (m in 1:length(Y)){
+  Y[m] <- sample(Z_support, size = 1, replace = TRUE, prob = conditional_dist[Y_support, Z[m]])
+}
+
+# Compute the the relative frequencies of the random samples 
+simulation_2 <- prop.table(table(Y, Z))
+
+# Create the simulated J matrix to compare the results  
+simulated_J_2 <- matrix(simulation_2, nrow = nrow(J), ncol = ncol(J))
+rownames(simulated_J_2) <- rownames(J)
+colnames(simulated_J_2) <- colnames(J)
+```
+
+```{r, echo=FALSE}
+cat("J matrix:")
+print(J)
+cat("\n")
+
+cat("Simulated J matrix generated using conditional distributions Y|Z: ")
+print(simulated_J_2)
+```
+
+Overall, both the simulations seem to have accurately capture the $J$ joint distribution, with simulated probabilities **closely resembling** the theoretical ones.
+
+\newpage
+
+## B. Bulb lifetime: a conjugate Bayesian analysis of exponential data
+
+You work for Light Bulbs International. You have developed an innovative bulb, and you are interested in characterizing it statistically. You test 20 innovative bulbs to determine their lifetimes, and you observe the following data (in hours), which have been sorted from smallest to largest.
+
+```{=tex}
+\begin{table}[!h]
+\centering
+\begin{tabular}{l}
+1, 13, 27, 43, 73, 75, 154, 196, 220, 297,\\
+344, 610, 734, 783, 796, 845, 859, 992, 1066, 1471
+\end{tabular}
+\end{table}
+```
+Based on your experience with light bulbs, you believe that their lifetimes $Y_i$ can be modeled using an exponential distribution conditionally on $\theta$ where $\psi = 1/\theta$ is the average bulb lifetime.
+
+### 1. Write the main ingredients of the Bayesian model.
+
+The main ingredients of the Bayesian model can be summarized as follows:
+
+- **Statistical Model**, which should reflect our beliefs
+about the conditional distribution of the observable data $Y$. In our case, the exponential distribution is chosen to model the lifetime of the bulbs: 
+
+$$
+Y_i {\sim}Exponential(\theta)
+$$
+
+- **Prior Distribution**, denoted as $\pi(θ)$, which represents our beliefs on the unknown parameter of interest $\theta$ *before* observing the data $Y$. 
+
+- **Likelihood Function**, denoted as $f(y|\theta)$ or $L_y(\theta)$, which represents the probability of observing the data given the parameter of interest $\theta$. In this case, it can be expressed as the Probability Density Function (PDF) of the exponential distribution:
+
+$$
+L_y(\theta) = f(y_1, y_2, ..., y_n | \theta) = \prod_{i=1}^{n} \theta e^{-\theta y_i} = \theta^n e^{-\theta \sum_{i=1}^n y_i} 
+$$ 
+
+  where $n$ represents the number of observation and $y_i$ represents the bulb        lifetimes.
+
+- **Posterior Distribution**, denoted as $\pi(\theta|y)$, which represents our updated beliefs about the parameter of interest $\theta$ *after* observing the data. It combines prior beliefs and the information derived from the observed data.
+
+
+### 2. Choose a conjugate prior distribution $\pi(\theta)$ with mean equal to 0.003 and standard deviation 0.00173.
+
+In our case, the conjugate prior distribution which leads the posterior within the same family is the **Gamma distribution**, with rate $\beta$ and shape $\alpha$. We can use the information about the mean and the standard deviation to determine its parameters.
+
+- Given that:
+
+$$
+\mu = \frac{\alpha}{\beta} \\
+\sigma = \sqrt\frac{\alpha}{\beta^2}
+$$
+
+- We can express $\alpha$ in terms of $\mu$ and $\sigma$:
+
+$$
+\alpha = \frac{\mu^2}{\sigma^2} = \frac{0.003^2}{0.00173^2} \approx 3.0
+$$
+
+- We can also express $\beta$ in terms of $\mu$ and $\sigma$:
+
+$$
+\beta = \frac{\mu}{\sigma^2} = \frac{0.003}{0.00173^2} \approx 1002.4
+$$
+
+- Finally, we have:  
+
+$$
+\theta {\sim} Gamma(\alpha=3.0,\beta=1002.4)
+$$
+
+
+### 3. Argue why with this choice you are providing only a vague prior opinion on the average lifetime of the bulb.
+
+The large value of $\beta$ directly influences the variance of the parameter $\theta$, resulting in a **wide range of potential average lifetimes**. According to this, our choice provides only a vague prior opinion on the average lifetime of the bulb without making any strong assumptions about the data before observing it.
+
+```{r, echo=FALSE}
+alpha_prior <- 3.0
+beta_prior <- 1002.4
+
+curve(dgamma(x, shape=alpha_prior, rate=beta_prior), from=0, to=0.02, xlab=expression(theta), ylab="Density", main = "Prior Distribution", col="darkblue", ylim=c(0, 280), lwd=3)
+grid()
+```
+
+### 4. Show that this setup fits into the framework of the conjugate Bayesian analysis.
+
+This setup fits into the framework of the conjugate Bayesian analysis because the posterior distribution can be analytically computed updating the parameters of the prior gamma distribution using the observed data $Y$:
+
+- Given the Likelihood function:
+$$
+L_y(\theta) = f(y_1, y_2, ..., y_n | \theta) = \prod_{i=1}^{n} \theta e^{-\theta y_i} = \theta^n e^{-\theta \sum_{i=1}^n y_i} 
+$$ 
+where $n$ represents the number of observations and $y_i$ represents the bulb lifetimes.
+
+- Given the kernel of the Gamma distribution:
+$$
+\pi(\theta) = \theta^{\alpha-1} e^{-\beta\theta}
+$$
+
+- We can compute the posterior distribution and its updated paramters as follows:
+$$
+\pi(\theta | y_1, \ldots, y_n) \propto \pi(\theta) \cdot f(y_1, \ldots, y_n | \theta) \propto e^{-\beta\theta} \theta^{\alpha-1} \cdot \theta^n e^{-\sum_{i} y_i \theta} = e^{-\theta(\beta + \sum_{i} y_i)} \cdot \theta^{(\alpha+n) - 1} 
+$$
+
+$$
+\alpha_{post} = \alpha_{prior} + n \\
+\beta_{post} = \beta_{prior} + \sum_{i=1}^n y_i \\
+\pi(\theta|y) \sim Gamma(\alpha_{post},\beta_{post}) 
+$$
+
+
+```{r}
+Y = c(1, 13, 27, 43, 73, 75, 154, 196, 220, 297, 344, 610, 734, 783, 796, 845, 859, 992, 1066, 1471)
+n = length(Y)
+
+alpha_post = alpha_prior + n 
+beta_post = beta_prior + sum(Y)
+
+true_mean <- mean(Y)
+prior_mean <- round(beta_prior/alpha_prior, 2)
+posterior_mean <- round(beta_post/alpha_post, 2)
+```
+
+```{r, echo=FALSE}
+cbind(alpha_prior, alpha_post, beta_prior, beta_post)
+cbind(true_mean, prior_mean, posterior_mean)
+```
+
+```{r, echo=FALSE}
+curve(dgamma(x, shape=alpha_prior, rate=beta_prior), from=0, to=0.01, xlab=expression(theta), ylab="Density", col="darkblue", ylim=c(0, 900), lwd=3)
+curve(dgamma(x, shape=alpha_post, rate=beta_post), from=0, to=0.010, col="lightblue", add=TRUE, lwd=3)
+title(main = "Prior vs Posterior Distribution")
+legend("topright", legend=c("Prior Distribution", "Posterior Distribution"), col=c("darkblue", "lightblue"), lty=1, lwd=2)
+grid()
+
+```
+
+We can observe how our prior beliefs are **deeply updated** by the observed bulb lifetimes, gradually converging towards a more accurate estimate of the true mean. This iterative process of updating prior beliefs with new evidence to form posterior beliefs reflects the essence of Bayesian model.
+
+### 5. Based on the information gathered on the 20 bulbs, what can you say about the main characteristics of the lifetime of your innovative bulb? Argue that we have learnt some relevant information about the $\theta$ parameter and this can be converted into relevant information about the unknown average lifetime of the innovative bulb $\psi=1/\theta$.
+
+Three main summaries of the posterior distribution $\pi(\theta∣y)$ are typically considered:
+
+1. **Posterior Mean**: 
+
+$$
+E(\theta|y) = \frac{\alpha_{post}}{\beta_{post}}
+$$
+
+2. **Posterior Median**:
+
+$$
+Median(\theta|y) = \theta_{0.5}(y) \quad  \text{s.t.} \quad  \pi(\theta \leq \theta_{0.5}(y)|y) \geq 0.5
+$$
+
+
+3. **Posterior Mode**:
+
+$$
+Mo(\theta|y) = \frac{\alpha_{post}-1}{\beta_{post}} \quad \text{if} \quad \alpha_{post} \geq 1, \quad 0 \quad \text{otherswise}
+$$
+
+```{r}
+# Posterior Mean of theta
+post_mean_theta = alpha_post/beta_post
+
+# Posterior Median of theta
+post_median_theta = qgamma(0.5, shape = alpha_post, rate = beta_post)
+
+# Posterior Mode of theta
+post_mode_theta = (alpha_post - 1) / (beta_post *(alpha_post>=1))
+```
+
+```{r, echo=FALSE}
+cbind(post_mean_theta, post_median_theta, post_mode_theta)
+```
+
+
+Additionally, to learn some relevant information about the unknown average bulb lifetime $\psi = \frac{1}{\theta}$, we should consider the **inverse of the Gamma distribution**:
+
+$$
+\psi \sim invGamma(\alpha_{post}, \beta_{post})
+$$
+```{r}
+# Posterior Mean of psi
+post_mean_psi = 1/post_mean_theta
+
+# Posterior Median of psi
+post_median_psi = 1/post_median_theta
+
+# Posterior Mode of psi
+post_mode_psi = 1/post_mode_theta
+```
+```{r, echo=FALSE}
+cbind(post_mean_psi, post_median_psi, post_mode_psi)
+```
+
+Overall, observing the following statistics, we can notice that the **mode** is slightly higher than both mean and median. This result suggests a **positively skewed distribution**, indicating that there are some bulbs with a lifetime longer than the majority of the others.
+
+
+### 6. However, your boss would be interested in the probability that the average bulb lifetime $1/\theta$ exceeds 550 hours. What can you say about that after observing the data? Provide her with a meaningful Bayesian answer.
+
+To estimate the probability that the average bulb lifetime $\psi$ exceeds 550 hours, we can utilize the **Cumulative Distribution Function (CDF)**:
+
+$$
+P(\frac{1}{\theta} > 550 | Y) = 1 - P(\frac{1}{\theta} < 550 | Y) = 1 - P(\psi < 550 | Y) 
+$$
+
+```{r}
+library(invgamma)
+prob <- 1 - pinvgamma(550, shape = alpha_post, rate = beta_post)
+cat("The probability that the average bulb lifetime exceeds 550 hours is", round(prob,3)*100 , "%.")
+```
+Based on the Bayesian analysis conducted on the observed data, the result indicates that only the **22.6%** of bulbs have a lifetime that exceeds 550 hours, taking also into account the uncertainty in the data.
+
+
+\newpage
+
+## C. Exchangeability
+
+Let us consider an infinitely exchangeable sequence of binary random variables $X_1,...,X_n,...$
+
+### 1. Provide the definition of the distributional properties characterizing an infinitely echangeable binary sequence of random variables $X_1, ...,X_n, ....$. Consider the De Finetti representation theorem relying on a suitable distribution $\pi(\theta)$ on $[0,1]$ and show that
+
+```{=tex}
+\begin{eqnarray*} 
+E[X_i]&=&E_{\pi}[\theta]\\
+E[X_i X_j] &=& E_{\pi}[\theta^2]\\
+Cov[X_i X_j] &=& Var_{\pi}[\theta]
+\end{eqnarray*}
+```
+
+A sequence of binary random variables $\{ X_n \}_{n=1}^{\infty}$ is *infinitely exchangeable* if for any $k$-tuple $(n_1, \ldots, n_k)$ and any permutation $\sigma = (\sigma_1, \ldots, \sigma_k)$ of the first \( k \) integers the joint distribution of the variables is invariant under permutation such that:
+
+$$
+(X_{n_1}, \ldots, X_{n_k}) \stackrel{d}{=} (X_{n_{\sigma_1}}, \ldots, X_{n_{\sigma_k}})
+$$  
+
+According to the **De Finetti Representation Theorem**, a sequence of binary random variables $\{ X_n \}_{n=1}^{\infty}$ is *infinitely exchangeable* if and only if there exists a distribution $\pi$ on [0, 1] such that:
+
+$$
+P(X_1 = x_1, X_2 = x_2, \ldots, X_n = x_n) = \int_{0}^{1} \prod_{i=1}^{n} \theta^{x_i} (1 - \theta)^{1 - x_i} \pi(\theta) d\theta
+$$
+
+The random variables are **conditionally independent and identically distributed $(i.d.)$ Bernoulli random variables**, where $\theta$ represents the common success probability. Hence:
+
+$$
+\bar{X}_n = \frac{1}{n} \sum_{i=1}^{n} X_i \rightarrow \theta \sim \pi(\theta) 
+$$
+$$
+\text{or, equivalently:} \\ 
+$$
+$$
+\bar{X}_n \approx \pi(\theta) 
+$$
+
+
+- Since $X_i$ is an identically distributed Bernoulli random variable and $\theta$ represents the success probability of $X_i$, for the **Law of Total Expectation** we have that:
+
+$$
+E[X_i] = E_\pi[E[X_i|\theta]] = E_\pi[\theta]
+$$
+  
+-  Since $X_i$ and $X_j$ are conditionally independent and identically distributed Bernoulli random variables and $\theta$ represents the common success probability, for the Law of Total Expectation we can write that:
+
+$$
+E[X_i \cdot X_j] = E_\pi[E[X_i \cdot X_j | \theta]] = E_\pi[E[X_i|\theta] \cdot E[E_j|\theta]] = E_\pi[\theta \cdot \theta] = E_\pi[\theta^2]
+$$ 
+    
+- Using the definition of covariance and the previous demonstrations, we can show      that:
+
+  $Cov[X_i, X_j] = E[X_i \cdot X_j] - E[X_i] \cdot E[X_j] = E_\pi[\theta^2]           - E_\pi[\theta] \cdot E_\pi[\theta] = E_\pi[\theta^2] - (E_\pi[\theta])^2 =         Var_\pi(\theta)$
+
+
+### 2. Prove that any couple of random variabes in that sequence must be non-negatively correlated.
+
+To prove that any pair of random variables in an infinitely exchangeable sequence must be non-negatively correlated, we need to show that:
+
+$$
+Cor[X_i, X_j] = \frac{Cov[X_i, X_j]}{\sqrt{Var[X_i] \cdot Var[X_j]}} > 0
+$$
+
+Applying the **definition for covariance for infinitely exchangeable sequence** and given that **$X_i$ and $X_j$ are identically distributed** (meaning that they have the same variance), we can express the previous formula as follows:
+
+$$
+Cor(X_i, X_j) = \frac{Var_\pi[\theta]}{Var[X_i]}
+$$
+
+Since this formula involves only variances and **variance is non-negative by definition**, this implies that the correlation between any pair of random variables in the sequence must also be non-negative.
+
+### 3. Find what are the conditions on the distribution $\pi(\cdot)$ so that $Cor[X_i X_j]=1$.
+
+
+$$
+Cor[X_i,X_j] = \frac{Cov[X_i, X_j]}{\sqrt{Var[X_i] \cdot Var[X_j]}} = 1
+$$
+
+
+Applying the **definition for covariance for infinitely exchangeable sequence** and given that **$X_i$ and $X_j$ are identically distributed** (meaning that they have the same variance), we can express the previous formula as follows:
+
+$$
+\frac{Var_\pi[\theta]}{\sqrt{Var[X_i] \cdot Var[X_j]}} = 1 \\
+\frac{Var_\pi[\theta]}{Var[X_i]} = 1 \iff Var_\pi[\theta] = Var[X_i]
+$$
+
+By applying the **Law of Total Variance**, we can decompose the variance of $X_i$ as follows:
+
+$$
+Var[X_i] = Var_\pi[E[X_i|\theta]]+E_\pi[Var[X_i|\theta]] = \\
+= Var_\pi[\theta] + E_\pi[\theta(1-\theta)]
+$$
+Given that $Cov[X_i, X_j] = 1 \iff Var_\pi[\theta] = Var[X_i]$, we can write that:
+
+$$
+Var[X_i] = Var[X_i] + E_\pi[\theta(1-\theta)] \\
+\implies E_\pi[\theta(1-\theta)] = 0 \implies E_\pi[\theta - \theta^2] = 0
+\implies E_\pi[\theta] = E_\pi[\theta^2]
+$$
+In conclusion, the condition on the distribution $\pi(\cdot)$ for which $Cor[X_i, X_j] = 1$ is that the **first moment equals the second moment**, i.e., $E_\pi[\theta] = E_\pi[\theta^2]$. 
+
+### 4. What do these conditions imply on the type and shape of $\pi(\cdot)$? (make an example).
+
+The type of distribution which is fully characterized by these conditions is the **Bernoulli distribution**. Recall that, considering $X \sim Ber(p)$, we have that:
+
+$$
+\text{First moment:} \quad E[X] = p 
+$$
+
+$$
+\text{Second moment:} \quad E[X^2] = P(X = 1) \cdot 1^2 + P(X=0)\cdot 0^2 = p\\
+$$
+
+And we can easily see that the first moment equals the second one.
+
+In terms of shape, the Bernoulli distribution is characterized by having only two possible outcomes, 1 or 0, with probabilities $p$ and $1-p$ respectively. As $p$ deviates from 0.5, the shape moves towards the side corresponding to the more probable outcome.
+
+For example, considering $p=0.7$, the shape would be moved towards $x=1$, reflecting the higher probability of success. Instead, considering $p=0.3$, the shape would be moved towards $x=0$, reflecting the higher probability of failure.
+
+
+\vspace{10.5cm}
+
+------------------------------------------------------------------------
+
+::: footer
+© 2023-2024 - Statistical Methods in Data Science and Laboratory II - 2023-2024
+:::
+
+```{r, warning=FALSE, error=FALSE, message=FALSE, echo=FALSE}
+cat(paste("Last update by LT:",date()))
+```
